@@ -3,25 +3,26 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Escáner QR + Alerta Telegram</title>
+<title>Escáner QR + Botón Alerta Telegram</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 body{font-family:Arial;background:#0f172a;color:#fff;text-align:center;padding:10px}
 #reader{width:100%;max-width:380px;margin:auto;border-radius:12px;overflow:hidden}
-button{margin:6px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
+button{margin:4px;padding:8px 14px;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
 .btn-start{background:#00c853;color:white}
 .btn-stop{background:#d32f2f;color:white}
 .btn-clear{background:#ff9800;color:white}
+.btn-alert{background:#0288d1;color:white;font-size:12px}
 #status{margin-top:10px;font-size:14px;color:#a9c7d2}
-table{width:100%;max-width:500px;margin:auto;margin-top:15px;border-collapse:collapse}
-th,td{border-bottom:1px solid rgba(255,255,255,0.2);padding:6px;font-size:13px}
+table{width:100%;max-width:520px;margin:auto;margin-top:15px;border-collapse:collapse}
+th,td{border-bottom:1px solid rgba(255,255,255,0.2);padding:6px;font-size:13px;text-align:center}
 th{background:#1c2a4a}
 td{color:#e2e8f0}
 </style>
 </head>
 <body>
-<h2>📷 Escáner QR - Registro con Alerta Telegram</h2>
-<p>Escanea un QR con nombre y teléfono. Se enviará alerta a Telegram automáticamente.</p>
+<h2>📷 Escáner QR - Registro + Botón Telegram</h2>
+<p>Escanea un QR con nombre y teléfono. Guarda los registros y manda alerta por Telegram manualmente.</p>
 
 <div id="reader"></div>
 <div>
@@ -33,15 +34,18 @@ td{color:#e2e8f0}
 
 <h3>📋 Registros</h3>
 <table>
-  <thead><tr><th>Nombre</th><th>Teléfono</th><th>Hora</th></tr></thead>
+  <thead>
+    <tr><th>Nombre</th><th>Teléfono</th><th>Hora</th><th>Acción</th></tr>
+  </thead>
   <tbody id="tableBody"></tbody>
 </table>
 
 <script>
-const BOT_TOKEN = "8188740505:AAFMJio9moB3PtypRlqMHrCobmTVTRo7Vy0  ";  // 🟢 Coloca aquí el token de tu bot
-const CHAT_IDS = [8290866315]; // 🟢 IDs de usuarios a notificar
+// 🟢 Configuración del Bot Telegram
+const BOT_TOKEN = "TU_TOKEN_AQUI";  // <- Pega aquí el token de tu bot
+const CHAT_IDS = [123456789, 987654321]; // <- IDs de los usuarios que recibirán el mensaje
 
-const STORAGE_KEY = "qr_registros_v2";
+const STORAGE_KEY = "qr_registros_v3";
 let html5QrCode;
 let isScanning = false;
 
@@ -53,11 +57,15 @@ function mostrarTabla(){
   const registros=cargarRegistros();
   tbody.innerHTML="";
   if(registros.length===0){
-    tbody.innerHTML=`<tr><td colspan="3" style="opacity:0.7">Sin registros</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="4" style="opacity:0.7">Sin registros</td></tr>`;
   }else{
-    registros.forEach(r=>{
+    registros.forEach((r,idx)=>{
       const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>`;
+      tr.innerHTML=`
+        <td>${r.nombre}</td>
+        <td>${r.telefono}</td>
+        <td>${r.hora}</td>
+        <td><button class='btn-alert' onclick='enviarTelegram(${idx})'>📩 Enviar alerta</button></td>`;
       tbody.appendChild(tr);
     });
   }
@@ -66,17 +74,6 @@ function mostrarTabla(){
 function obtenerHora(){
   const d=new Date();
   return d.toLocaleString('es-MX',{hour12:false});
-}
-
-function enviarTelegram(nombre,telefono,hora){
-  const mensaje = `🚍 Registro detectado:\n👤 ${nombre}\n📱 ${telefono || "Sin teléfono"}\n🕒 ${hora}`;
-  CHAT_IDS.forEach(id=>{
-    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({chat_id:id,text:mensaje})
-    }).catch(err=>console.error("Error enviando a Telegram:",err));
-  });
 }
 
 function procesarQR(txt){
@@ -95,7 +92,28 @@ function procesarQR(txt){
 
   document.getElementById('status').textContent=`✅ Escaneado: ${nombre} (${telefono||"sin teléfono"}) a las ${hora}`;
   navigator.vibrate?.(120);
-  enviarTelegram(nombre,telefono,hora);
+}
+
+// 📨 Enviar alerta manual a Telegram
+function enviarTelegram(index){
+  const registros = cargarRegistros();
+  const r = registros[index];
+  if(!r) return;
+  const mensaje = `🚍 Registro detectado:\n👤 ${r.nombre}\n📱 ${r.telefono||"Sin teléfono"}\n🕒 ${r.hora}`;
+  const proxy = "https://api.allorigins.win/raw?url="; // ✅ Evita error CORS
+
+  CHAT_IDS.forEach(id => {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${id}&text=${encodeURIComponent(mensaje)}`;
+    fetch(proxy + encodeURIComponent(url))
+      .then(r=>r.text())
+      .then(()=>{
+        alert(`✅ Alerta enviada a Telegram:\n${r.nombre}`);
+      })
+      .catch(err=>{
+        console.error("Error enviando a Telegram:", err);
+        alert("⚠️ Error al enviar alerta. Revisa el token o chat_id.");
+      });
+  });
 }
 
 async function startCamera(){
@@ -138,6 +156,7 @@ document.getElementById('startBtn').onclick=startCamera;
 document.getElementById('stopBtn').onclick=stopCamera;
 document.getElementById('clearBtn').onclick=limpiarRegistros;
 
+// Mostrar registros al cargar
 mostrarTabla();
 </script>
 </body>
