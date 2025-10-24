@@ -1,0 +1,248 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Registro por QR - Escáner</title>
+
+  <!-- html5-qrcode v2 -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    body { font-family: system-ui, Arial; margin: 12px; background:#f7f7f8; color:#111; }
+    h1 { font-size:1.2rem; margin-bottom:6px; }
+    .card { background:#fff; padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.06); margin-bottom:12px; }
+    #reader { width:100%; max-width:480px; margin:auto; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    button { padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:#fff; cursor:pointer; }
+    button.primary { background:#0b74ff; color:white; border-color:#0b74ff; }
+    label { display:block; font-weight:600; margin-top:8px; }
+    input[type="text"], input[type="time"] { width:100%; padding:8px; border-radius:8px; border:1px solid #ccc; box-sizing:border-box; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; font-size:0.95rem; }
+    th, td { padding:8px 6px; border-bottom:1px solid #eee; text-align:left; }
+    .small { font-size:0.85rem; color:#555; }
+    .muted { color:#666; font-size:0.9rem; }
+    .actions { display:flex; gap:6px; }
+    .danger { background:#ff4d4f; color:white; border-color:#ff4d4f; }
+    .ok { background:#22c55e; color:white; border-color:#22c55e; }
+    @media(min-width:900px){ .two-col { display:flex; gap:12px; } .col { flex:1 } }
+  </style>
+</head>
+<body>
+
+  <h1>Registro de personas por QR</h1>
+
+  <div class="card two-col">
+    <div class="col card" style="padding:10px;">
+      <div id="reader"></div>
+      <div class="controls">
+        <button id="btnStart" class="primary">Iniciar cámara</button>
+        <button id="btnStop">Detener cámara</button>
+        <button id="btnScanFile">Subir imagen QR</button>
+        <input id="fileInput" type="file" accept="image/*" style="display:none" />
+      </div>
+      <div id="status" class="muted small" style="margin-top:8px;">Estado: listo</div>
+    </div>
+
+    <div class="col card" style="padding:10px;">
+      <div><strong>Resultado del escaneo</strong></div>
+
+      <label>Nombre</label>
+      <input id="inpNombre" type="text" placeholder="Nombre completo">
+
+      <label>Grado / Escuela</label>
+      <input id="inpGrado" type="text" placeholder="Ej. 3° primaria / Secundaria">
+
+      <label>Hora de abordaje</label>
+      <input id="inpHora" type="time" >
+
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button id="btnGuardar" class="ok">Guardar registro</button>
+        <button id="btnUsarHoraNow">Usar hora actual</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <small class="muted">Formato QR aceptado:
+          <ul class="small muted">
+            <li>JSON: <code>{"nombre":"Juan","grado":"3°","hora":"08:30"}</code></li>
+            <li>Separado por pipe o coma: <code>Juan|3°|08:30</code> o <code>Juan,3°,08:30</code></li>
+            <li>Si sólo contiene un texto, se toma como nombre.</li>
+          </ul>
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>Historial de registros</strong>
+      <div class="actions">
+        <button id="btnExport">Exportar CSV</button>
+        <button id="btnClear" class="danger">Limpiar todo</button>
+      </div>
+    </div>
+
+    <div id="histocontainer" style="overflow:auto; max-height:360px; margin-top:6px;">
+      <table id="tablaHist">
+        <thead>
+          <tr><th>#</th><th>Nombre</th><th>Grado</th><th>Hora abordaje</th><th>Guardado</th><th>Acciones</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  const LS_KEY = "registro_qr";
+
+  function loadRegs(){ try { return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); } catch(e){ return []; } }
+  function saveRegs(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+
+  const statusEl = document.getElementById('status');
+  const inpNombre = document.getElementById('inpNombre');
+  const inpGrado = document.getElementById('inpGrado');
+  const inpHora = document.getElementById('inpHora');
+  const tablaBody = document.querySelector('#tablaHist tbody');
+
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const btnScanFile = document.getElementById('btnScanFile');
+  const fileInput = document.getElementById('fileInput');
+  const btnGuardar = document.getElementById('btnGuardar');
+  const btnUsarHoraNow = document.getElementById('btnUsarHoraNow');
+  const btnExport = document.getElementById('btnExport');
+  const btnClear = document.getElementById('btnClear');
+
+  let html5QrScanner = null;
+  let lastScannedText = null;
+
+  function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])); }
+
+  function renderHist(){
+    const regs = loadRegs();
+    tablaBody.innerHTML = "";
+    regs.slice().reverse().forEach((r,i)=>{
+      const idx = regs.length-i;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${idx}</td>
+        <td>${escapeHtml(r.nombre)}</td>
+        <td>${escapeHtml(r.grado)}</td>
+        <td>${escapeHtml(r.hora)}</td>
+        <td class="small muted">${new Date(r._savedAt).toLocaleString()}</td>
+        <td><button data-i="${idx-1}" class="btn-del danger">Eliminar</button></td>
+      `;
+      tablaBody.appendChild(tr);
+    });
+    document.querySelectorAll('.btn-del').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const i = Number(btn.getAttribute('data-i'));
+        const arr = loadRegs();
+        arr.splice(i,1);
+        saveRegs(arr);
+        renderHist();
+      });
+    });
+  }
+
+  function parseQRContent(text){
+    try {
+      const obj = JSON.parse(text);
+      return { nombre: obj.nombre||"", grado: obj.grado||"", hora: obj.hora||"" };
+    } catch(e){}
+    let parts = null;
+    if (text.indexOf("|")!==-1) parts=text.split("|");
+    else if (text.indexOf(",")!==-1) parts=text.split(",");
+    if (parts) return { nombre:(parts[0]||"").trim(), grado:(parts[1]||"").trim(), hora:(parts[2]||"").trim() };
+    const maybeTime = text.match(/(.*)\s+([0-2]?\d:[0-5]\d)$/);
+    if (maybeTime) return { nombre:maybeTime[1].trim(), grado:"", hora:maybeTime[2] };
+    return { nombre:text.trim(), grado:"", hora:"" };
+  }
+
+  function onScanSuccess(decodedText){
+    if (decodedText===lastScannedText) return;
+    lastScannedText=decodedText;
+    statusEl.textContent = "Escaneo: " + decodedText;
+    const parsed = parseQRContent(decodedText);
+    inpNombre.value = parsed.nombre;
+    inpGrado.value = parsed.grado;
+    inpHora.value = parsed.hora;
+  }
+
+  function guardarRegistro(){
+    const nombre = inpNombre.value.trim();
+    if (!nombre){ alert("Completa al menos el nombre antes de guardar."); return; }
+    const regs = loadRegs();
+    regs.push({ nombre, grado: inpGrado.value.trim(), hora: inpHora.value.trim(), _savedAt: new Date().toISOString() });
+    saveRegs(regs);
+    renderHist();
+    statusEl.textContent = "Registro guardado: " + nombre;
+  }
+
+  btnGuardar.addEventListener('click', guardarRegistro);
+  btnUsarHoraNow.addEventListener('click', ()=>{
+    const now=new Date();
+    inpHora.value = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  });
+
+  async function startCamera(){
+    if (html5QrScanner){ statusEl.textContent="El escáner ya está activo."; return; }
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (!devices || !devices.length){ alert("No se detectaron cámaras."); return; }
+      const cameraId = devices[0].id;
+      html5QrScanner = new Html5Qrcode("reader");
+      const config = { fps:10, qrbox:300 };
+      await html5QrScanner.start({ deviceId:{ exact:cameraId } }, config, onScanSuccess, (err)=>{});
+      statusEl.textContent = "Cámara iniciada. Apunta al QR.";
+    } catch(err){
+      console.error(err);
+      statusEl.textContent = "Error al iniciar cámara: " + (err.message||err);
+      alert("No se pudo acceder a la cámara. Usa 'Subir imagen QR' o revisa permisos.");
+    }
+  }
+
+  btnStart.addEventListener('click', startCamera);
+
+  btnStop.addEventListener('click', async ()=>{
+    if (!html5QrScanner){ statusEl.textContent="El escáner no está activo."; return; }
+    try { await html5QrScanner.stop(); html5QrScanner.clear(); html5QrScanner=null; statusEl.textContent="Cámara detenida."; } 
+    catch(err){ console.error(err); statusEl.textContent="Error al detener cámara: "+err; }
+  });
+
+  btnScanFile.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', async (e)=>{
+    const f=e.target.files[0]; if (!f) return;
+    if (!html5QrScanner) html5QrScanner = new Html5Qrcode("reader");
+    statusEl.textContent="Analizando imagen...";
+    try {
+      const result = await html5QrScanner.scanFile(f,true);
+      if (result) onScanSuccess(result);
+      else statusEl.textContent="No se detectó QR en la imagen.";
+    } catch(err){
+      statusEl.textContent="Error leyendo imagen: "+(err.message||err);
+    } finally { fileInput.value=""; }
+  });
+
+  btnExport.addEventListener('click', ()=>{
+    const regs = loadRegs(); if (!regs.length){ alert("No hay registros para exportar."); return; }
+    const headers=["Nombre","Grado","Hora abordaje","Guardado ISO"];
+    const rows = regs.map(r=>[r.nombre,r.grado,r.hora,r._savedAt]);
+    const csv=[headers,...rows].map(r=>r.map(c=>`"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\r\n");
+    const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download="registros_qr.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  btnClear.addEventListener('click', ()=>{
+    if (confirm("¿Borrar todo el historial?")) { localStorage.removeItem(LS_KEY); renderHist(); }
+  });
+
+  window.addEventListener('keydown', (e)=>{ if ((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){ e.preventDefault(); guardarRegistro(); }});
+  window.addEventListener('beforeunload', async ()=>{ if (html5QrScanner){ try{ await html5QrScanner.stop(); html5QrScanner.clear(); } catch(e){} } });
+
+  renderHist();
+</script>
+
+</body>
+</html>
