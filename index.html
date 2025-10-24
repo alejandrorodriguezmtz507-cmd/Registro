@@ -1,438 +1,413 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Registro por QR - Escáner</title>
-
-  <!-- html5-qrcode v2 -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
-  <style>
-    body{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; padding:12px; background:#f7f7fb; color:#111 }
-    h1{ font-size:20px; margin:0 0 8px 0 }
-    .card{ background:white; border-radius:10px; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:12px }
-    #reader { width:100%; max-width:480px; margin:auto; }
-    label{ display:block; margin-top:8px; font-size:13px }
-    input, select, button, textarea{ width:100%; padding:8px 10px; box-sizing:border-box; margin-top:6px; border:1px solid #ddd; border-radius:8px; font-size:14px }
-    .row{ display:flex; gap:8px }
-    .row > *{ flex:1 }
-    .small{ width:auto; }
-    table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:13px }
-    th,td{ padding:6px 8px; border-bottom:1px solid #eee; text-align:left }
-    .actions button{ margin-right:6px; margin-top:4px }
-    .hint{ font-size:12px; color:#666; margin-top:6px }
-    .danger{ color:#9b1c1c }
-    .success{ color:#116611 }
-    footer{ font-size:12px; color:#666; margin-top:12px; text-align:center }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Registro QR (BarcodeDetector)</title>
+<style>
+  :root{
+    --bg:#071428; --card:#0b2540; --accent:#ff7a59; --glass: rgba(255,255,255,0.04);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  body{ margin:0; min-height:100vh; background:linear-gradient(180deg,var(--bg),#032233); color:#e6f7ff; display:flex; align-items:center; justify-content:center; padding:18px;}
+  .app{ width:100%; max-width:980px; display:grid; grid-template-columns: 420px 1fr; gap:18px; }
+  .card{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.12)); border-radius:14px; padding:16px; box-shadow:0 8px 30px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03) }
+  h1{ margin:0 0 8px 0; font-size:20px }
+  #videoWrap{ width:100%; height:320px; border-radius:12px; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; position:relative }
+  video{ width:100%; height:100%; object-fit:cover }
+  .controls{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap }
+  button{ background:linear-gradient(90deg,var(--accent),#ff5c4a); border:none; color:#fff; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700 }
+  select,input{ padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:inherit }
+  .muted{ color:#bfe9f7; opacity:0.85; font-size:13px }
+  table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:13px }
+  th,td{ text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,0.03) }
+  thead th{ color:#dbeffd; font-weight:700; font-size:12px }
+  .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:22px; background:rgba(3,27,39,0.9); padding:10px 14px; border-radius:10px; color:#dff6ff; font-weight:700; box-shadow:0 8px 30px rgba(0,0,0,0.6) }
+  @media(max-width:980px){ .app{ grid-template-columns:1fr } #videoWrap{ height:260px } }
+</style>
 </head>
 <body>
-  <h1>Escáner QR - Registro de pasajeros</h1>
-
-  <div class="card">
-    <div><strong>Configuración</strong></div>
-    <label>Usar cámara trasera automáticamente
-      <select id="cameraPreference">
-        <option value="auto">Intentar cámara trasera</option>
-        <option value="first">Primera cámara disponible</option>
-      </select>
-    </label>
-
-    <label>
-      Enviar WhatsApp automáticamente tras escaneo?
-      <select id="autoWhatsapp">
-        <option value="no">No (recomendada)</option>
-        <option value="yes">Sí (abrirá WhatsApp tras cada escaneo)</option>
-      </select>
-    </label>
-
-    <div class="hint">El QR puede contener JSON con campos <code>nombre, grado, hora, telefono</code>.
-      Ejemplo QR (JSON): <code>{"nombre":"Ana","grado":"3°","hora":"08:10","telefono":"521234567890"}</code>
-    </div>
-  </div>
-
-  <div class="card" id="scannerCard">
-    <div id="reader"></div>
-    <div id="cameraInfo" class="hint"></div>
-    <div id="scannerStatus" class="hint"></div>
-    <div style="margin-top:8px; display:flex; gap:8px;">
-      <button id="startBtn">Iniciar cámara</button>
-      <button id="stopBtn">Detener cámara</button>
-      <button id="toggleTorchBtn" style="display:none;">Alternar linterna</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div><strong>Formulario / Registro manual</strong></div>
-    <label>Nombre
-      <input id="inputNombre" placeholder="Nombre completo" />
-    </label>
-    <div class="row">
-      <div>
-        <label>Año escolar / Grado
-          <input id="inputGrado" placeholder="Ej. 1°, 3° primaria, Secundaria" />
-        </label>
+  <div class="app">
+    <div class="card">
+      <h1>Escáner QR — Registro</h1>
+      <div id="videoWrap">
+        <video id="video" autoplay muted playsinline></video>
+        <div id="noCamMsg" style="position:absolute; color:#bfe9f7; text-align:center; padding:12px; display:none">
+          Cámara no iniciada
+        </div>
       </div>
-      <div>
-        <label>Hora de abordaje
-          <input id="inputHora" placeholder="HH:MM" />
-        </label>
+
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between">
+        <div style="display:flex; gap:8px; align-items:center">
+          <label class="muted">Cámara:</label>
+          <select id="cameraSelect"></select>
+        </div>
+        <div class="muted" id="statusText">Estado: esperando</div>
+      </div>
+
+      <div class="controls" style="margin-top:10px">
+        <button id="startBtn">Iniciar</button>
+        <button id="stopBtn" style="display:none;background:#ff6b6b">Detener</button>
+        <button id="importBtn" style="background:#ffd166;color:#111">Importar imagen</button>
+        <button id="clearBtn" style="background:#6be0a1;color:#053">Limpiar historial</button>
+      </div>
+
+      <div style="margin-top:12px" class="muted">
+        <div>Detector nativo: <span id="detectorSupport">—</span></div>
+        <div style="margin-top:6px">Si tu navegador NO soporta <code>BarcodeDetector</code>, la app te pedirá usar la librería externa o importar imagen.</div>
       </div>
     </div>
-    <label>Teléfono (incluir código país sin +, ej. 521234567890 para México)
-      <input id="inputTelefono" placeholder="521234567890" />
-    </label>
 
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <button id="saveManualBtn">Guardar registro</button>
-      <button id="sendWhatsManualBtn">Abrir WhatsApp (enviar ahora)</button>
+    <div class="card">
+      <h1>Historial y contadores</h1>
+      <div style="display:flex; gap:12px; margin-bottom:8px">
+        <div style="flex:1">
+          <div class="muted">Total</div>
+          <div id="totalCount" style="font-size:26px;font-weight:800">0</div>
+        </div>
+        <div style="flex:1">
+          <div class="muted">Únicos</div>
+          <div id="uniqueCount" style="font-size:26px;font-weight:800">0</div>
+        </div>
+        <div style="flex:1">
+          <div class="muted">Hoy</div>
+          <div id="todayCount" style="font-size:26px;font-weight:800">0</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+        <input id="search" placeholder="Buscar por nombre o fecha" style="flex:1"/>
+        <button id="searchClear" style="background:#c7f9e8;color:#053">Limpiar</button>
+        <button id="exportCsv" style="background:#ffd166;color:#111">Exportar CSV</button>
+      </div>
+
+      <div style="max-height:420px; overflow:auto;">
+        <table>
+          <thead>
+            <tr><th>Nombre</th><th>Fecha / Hora</th><th>Origen</th><th></th></tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:10px; color:#bfe9f7; font-size:13px">
+        Guardado en <strong>localStorage</strong> del navegador — permanece en tu dispositivo.
+      </div>
     </div>
-    <div class="hint">WhatsApp se abrirá usando <code>https://wa.me/&lt;telefono&gt;?text=...</code>. El número debe estar en formato internacional sin signos.</div>
   </div>
 
-  <div class="card">
-    <div><strong>Historial</strong></div>
-    <div style="display:flex; gap:8px; margin-top:6px;">
-      <button id="clearAllBtn">Limpiar historial</button>
-      <button id="downloadCsvBtn">Descargar CSV</button>
-    </div>
-
-    <table id="histTable" aria-live="polite">
-      <thead>
-        <tr><th>#</th><th>Nombre</th><th>Grado</th><th>Hora</th><th>Teléfono</th><th>Fecha registro</th><th>Acciones</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <footer>Hecho localmente — no se envía nada a servidores externos.</footer>
+  <div id="toast" class="toast" style="display:none"></div>
 
 <script>
-  // LocalStorage key
-  const STORAGE_KEY = 'qr_registros_v1';
+/* ---------- Config y storage ---------- */
+const STORAGE_KEY = 'qr_registrations_v2';
+let stream = null;
+let currentTrack = null;
+let processing = false;
+let barcodeDetector = null;
+let lastDetected = { text:null, ts:0 };
 
-  // UI elements
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const readerDiv = document.getElementById('reader');
-  const scannerStatus = document.getElementById('scannerStatus');
-  const cameraInfo = document.getElementById('cameraInfo');
-  const cameraPreference = document.getElementById('cameraPreference');
-  const autoWhatsapp = document.getElementById('autoWhatsapp');
-  const toggleTorchBtn = document.getElementById('toggleTorchBtn');
+/* ---------- UI refs ---------- */
+const video = document.getElementById('video');
+const cameraSelect = document.getElementById('cameraSelect');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusText = document.getElementById('statusText');
+const detectorSupport = document.getElementById('detectorSupport');
+const historyBody = document.getElementById('historyBody');
+const totalCountEl = document.getElementById('totalCount');
+const uniqueCountEl = document.getElementById('uniqueCount');
+const todayCountEl = document.getElementById('todayCount');
+const toast = document.getElementById('toast');
+const importBtn = document.getElementById('importBtn');
+const clearBtn = document.getElementById('clearBtn');
+const exportCsv = document.getElementById('exportCsv');
+const searchInput = document.getElementById('search');
+const searchClear = document.getElementById('searchClear');
 
-  const inputNombre = document.getElementById('inputNombre');
-  const inputGrado = document.getElementById('inputGrado');
-  const inputHora = document.getElementById('inputHora');
-  const inputTelefono = document.getElementById('inputTelefono');
-  const saveManualBtn = document.getElementById('saveManualBtn');
-  const sendWhatsManualBtn = document.getElementById('sendWhatsManualBtn');
+/* ---------- Helpers ---------- */
+function showToast(msg, t=1600){
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> toast.style.display='none', t);
+}
+function nowLocal(){
+  const d=new Date();
+  return { iso:d.toISOString(), display: d.toLocaleString('es-MX', { hour12:false }) };
+}
+function loadScans(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch(e){return []}}
+function saveScans(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); refreshUI(); }
 
-  const histTableBody = document.querySelector('#histTable tbody');
-  const clearAllBtn = document.getElementById('clearAllBtn');
-  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
-
-  let html5QrCode = null;
-  let currentCameraId = null;
-  let supportsTorch = false;
-  let torchOn = false;
-
-  // Utility: load & save history
-  function loadRecords(){
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    }catch(e){ return []; }
+/* ---------- Camera device list ---------- */
+async function populateCameras(){
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind==='videoinput');
+    cameraSelect.innerHTML = '';
+    cams.forEach((c,i)=> {
+      const opt = document.createElement('option');
+      opt.value = c.deviceId;
+      opt.textContent = c.label || `Cámara ${i+1}`;
+      cameraSelect.appendChild(opt);
+    });
+    return cams;
+  }catch(e){
+    console.error('enumerateDevices', e);
+    return [];
   }
-  function saveRecords(arr){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-    renderHistory();
+}
+
+/* ---------- Start / Stop stream ---------- */
+async function startStream(deviceId){
+  stopStream();
+  try{
+    const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' } , audio:false };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    currentTrack = stream.getVideoTracks()[0];
+    statusText.textContent = 'Estado: cámara activa';
+    processing = true;
+    startDetectionLoop();
+  }catch(err){
+    console.error('getUserMedia', err);
+    statusText.textContent = 'Estado: error cámara';
+    alert('Error al acceder a la cámara: ' + (err.message || err));
+  }
+}
+function stopStream(){
+  processing = false;
+  if (stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    currentTrack = null;
+    video.srcObject = null;
+  }
+  statusText.textContent = 'Estado: detenido';
+}
+
+/* ---------- Detection loop usando BarcodeDetector (o fallback) ---------- */
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+
+async function startDetectionLoop(){
+  if (!processing) return;
+  // preparar detector si no existe
+  if (!barcodeDetector){
+    if ('BarcodeDetector' in window){
+      try {
+        // preferimos solo QR
+        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        detectorSupport.textContent = 'Sí (nativo)';
+      } catch(e){
+        console.warn('BarcodeDetector init failed', e);
+        detectorSupport.textContent = 'No (error)';
+      }
+    } else {
+      detectorSupport.textContent = 'No';
+    }
   }
 
-  function addRecord(record){
-    const arr = loadRecords();
-    arr.unshift(record);
-    saveRecords(arr);
+  // loop
+  async function loop(){
+    if (!processing || !stream) return;
+    if (video.readyState >= 2){
+      // ajustar canvas al video actual
+      const w = video.videoWidth, h = video.videoHeight;
+      if (w && h){
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+        try{
+          if (barcodeDetector){
+            // detect on canvas
+            const result = await barcodeDetector.detect(canvas);
+            if (result && result.length){
+              handleDetected(result[0].rawValue || result[0].rawData || JSON.stringify(result[0]));
+            }
+          } else {
+            // Fallback básico: no decode, solo muestra mensaje (instrucción)
+            // Para navegadores sin BarcodeDetector te pedimos usar import image o la librería externa
+          }
+        }catch(e){
+          console.debug('detect error', e);
+        }
+      }
+    }
+    // small delay to avoid high CPU: requestAnimationFrame is ok, but add micro-delay
+    setTimeout(()=>{ if (processing) requestAnimationFrame(loop); }, 80);
   }
+  loop();
+}
 
-  function renderHistory(){
-    const arr = loadRecords();
-    histTableBody.innerHTML = '';
-    arr.forEach((r, i) => {
+/* ---------- Handle detection (debounce) ---------- */
+function handleDetected(text){
+  const now = Date.now();
+  if (!text) return;
+  // evitar lecturas duplicadas inmediatas
+  if (lastDetected.text === text && (now - lastDetected.ts) < 2000) return;
+  lastDetected = { text, ts: now };
+
+  // parsear texto: si es JSON y contiene "name" o "nombre" usarlo
+  let name = text;
+  try{
+    const j = JSON.parse(text);
+    if (j && typeof j === 'object' && (j.name || j.nombre)) name = j.name || j.nombre;
+  }catch(e){}
+
+  addScan(name, text, 'camara');
+  showToast('Registrado: ' + name, 1400);
+  navigator.vibrate?.(80);
+}
+
+/* ---------- Scans management ---------- */
+function addScan(name, raw, origin='camara'){
+  const ts = nowLocal();
+  const item = { id:'s_' + Math.random().toString(36).slice(2,9), name, raw, origin, iso:ts.iso, display:ts.display };
+  const arr = loadScans();
+  arr.unshift(item);
+  saveScans(arr);
+}
+
+function refreshUI(){
+  const arr = loadScans();
+  // filter by search
+  const q = searchInput.value.trim().toLowerCase();
+  const filtered = arr.filter(it => {
+    if(!q) return true;
+    return (it.name && it.name.toLowerCase().includes(q)) || (it.display && it.display.toLowerCase().includes(q)) || (it.raw && it.raw.toLowerCase().includes(q));
+  });
+
+  historyBody.innerHTML = '';
+  if (filtered.length === 0){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="4" style="color:#bfe9f7;padding:12px">No hay registros</td>`;
+    historyBody.appendChild(tr);
+  } else {
+    filtered.forEach(it => {
       const tr = document.createElement('tr');
-      const idx = arr.length - i; // simple index
-      tr.innerHTML = `
-        <td>${idx}</td>
-        <td>${escapeHtml(r.nombre || '')}</td>
-        <td>${escapeHtml(r.grado || '')}</td>
-        <td>${escapeHtml(r.hora || '')}</td>
-        <td>${escapeHtml(r.telefono || '')}</td>
-        <td>${escapeHtml(r.fecha || '')}</td>
-        <td class="actions">
-          <button data-i="${i}" class="btn-whatsapp">WhatsApp</button>
-          <button data-i="${i}" class="btn-delete">Eliminar</button>
-        </td>
-      `;
-      histTableBody.appendChild(tr);
+      tr.innerHTML = `<td style="font-weight:700">${escapeHtml(it.name)}</td><td class="muted">${escapeHtml(it.display)}</td><td class="muted">${escapeHtml(it.origin)}</td>
+      <td style="text-align:right"><button data-id="${it.id}" class="delBtn" style="background:#ff6b6b;border:none;padding:6px 8px;border-radius:6px;color:#fff">Eliminar</button></td>`;
+      historyBody.appendChild(tr);
     });
   }
 
-  function escapeHtml(text){ return String(text || '').replace(/[&<>"']/g, function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]}); }
+  totalCountEl.textContent = arr.length;
+  uniqueCountEl.textContent = new Set(arr.map(x => (x.name||'').toLowerCase())).size;
+  const todayKey = new Date().toISOString().slice(0,10);
+  todayCountEl.textContent = arr.filter(x => x.iso.slice(0,10) === todayKey).length;
 
-  // WhatsApp open
-  function makeWhatsUrl(telefono, record){
-    // sanitize phone: remove spaces, dashes, parentheses, plus
-    const phoneClean = String(telefono || '').replace(/[^0-9]/g,'');
-    // Build message text
-    const parts = [];
-    if(record.nombre) parts.push(`Nombre: ${record.nombre}`);
-    if(record.grado) parts.push(`Grado: ${record.grado}`);
-    if(record.hora) parts.push(`Hora: ${record.hora}`);
-    parts.push(`Fecha registro: ${record.fecha || (new Date()).toLocaleString()}`);
-    let message = `Registro recibido:\n${parts.join('\n')}`;
-    return `https://wa.me/${phoneClean}?text=` + encodeURIComponent(message);
-  }
-
-  // Handle click events in history (delegation)
-  histTableBody.addEventListener('click', (e) => {
-    const btn = e.target;
-    if(btn.classList.contains('btn-delete')){
-      const i = Number(btn.dataset.i);
-      const arr = loadRecords();
-      arr.splice(i,1);
-      saveRecords(arr);
-    } else if(btn.classList.contains('btn-whatsapp')){
-      const i = Number(btn.dataset.i);
-      const arr = loadRecords();
-      const rec = arr[i];
-      if(!rec) return alert('Registro no encontrado');
-      const url = makeWhatsUrl(rec.telefono, rec);
-      window.open(url, '_blank');
-    }
-  });
-
-  // Manual save
-  saveManualBtn.addEventListener('click', () => {
-    const rec = {
-      nombre: inputNombre.value.trim(),
-      grado: inputGrado.value.trim(),
-      hora: inputHora.value.trim(),
-      telefono: inputTelefono.value.trim(),
-      fecha: new Date().toLocaleString()
+  // attach delete handlers
+  Array.from(document.getElementsByClassName('delBtn')).forEach(b=>{
+    b.onclick = ()=> {
+      if (!confirm('Eliminar registro?')) return;
+      const id = b.dataset.id;
+      const newArr = loadScans().filter(x=>x.id !== id);
+      saveScans(newArr);
     };
-    if(!rec.nombre || !rec.telefono){
-      return alert('Nombre y teléfono son requeridos.');
-    }
-    addRecord(rec);
-    inputNombre.value=''; inputGrado.value=''; inputHora.value=''; inputTelefono.value='';
   });
+}
 
-  sendWhatsManualBtn.addEventListener('click', () => {
-    const rec = {
-      nombre: inputNombre.value.trim(),
-      grado: inputGrado.value.trim(),
-      hora: inputHora.value.trim(),
-      telefono: inputTelefono.value.trim(),
-      fecha: new Date().toLocaleString()
-    };
-    if(!rec.telefono) return alert('Ingrese teléfono (formato internacional sin +).');
-    const url = makeWhatsUrl(rec.telefono, rec);
-    window.open(url, '_blank');
-  });
+function escapeHtml(s=''){ return String(s).replace(/[&<>"'`=\/]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'})[ch]); }
 
-  // Clear all
-  clearAllBtn.addEventListener('click', () => {
-    if(confirm('Eliminar todo el historial?')) {
-      localStorage.removeItem(STORAGE_KEY);
-      renderHistory();
-    }
-  });
-
-  // Download CSV
-  downloadCsvBtn.addEventListener('click', () => {
-    const arr = loadRecords();
-    if(arr.length === 0) return alert('No hay registros para exportar.');
-    const header = ['nombre','grado','hora','telefono','fecha'];
-    const csv = [header.join(',')].concat(arr.map(r => {
-      return header.map(h => `"${(r[h]||'').toString().replace(/"/g,'""')}"`).join(',');
-    })).join('\n');
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `registros_qr_${new Date().toISOString().slice(0,19)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  // Scanner start/stop
-  startBtn.addEventListener('click', startScanner);
-  stopBtn.addEventListener('click', stopScanner);
-
-  // On page load, render history
-  renderHistory();
-
-  // Auto-start scanner? no, wait for user to press
-  // Scanner functions
-  async function startScanner(){
-    if(html5QrCode) {
-      scannerStatus.textContent = 'Escáner ya iniciado.';
-      return;
-    }
-    scannerStatus.textContent = 'Detectando cámaras...';
-    try {
-      const devices = await Html5Qrcode.getCameras();
-      if(!devices || devices.length === 0){
-        scannerStatus.textContent = 'No se detectaron cámaras en el dispositivo.';
-        return;
-      }
-      // choose camera: prefer label with back/rear, otherwise depending on preference pick first/last
-      let chosen = devices[0];
-      const pref = cameraPreference.value;
-      // try to find 'back' or 'rear'
-      const back = devices.find(d => d.label && /back|rear|trasera|trasero/i.test(d.label));
-      if(back) chosen = back;
-      else if(pref === 'first') chosen = devices[0];
-      else chosen = devices[devices.length-1];
-
-      currentCameraId = chosen.id;
-      cameraInfo.textContent = `Usando cámara: ${chosen.label || chosen.id}`;
-
-      html5QrCode = new Html5Qrcode("reader", /* verbose= */ false);
-
-      const config = { fps: 10, qrbox: {width: 300, height: 200}, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
-
-      await html5QrCode.start(
-        currentCameraId,
-        config,
-        qrCodeSuccessCallback,
-        qrCodeErrorCallback
-      );
-
-      // Try to detect torch capability
-      try {
-        const cap = await html5QrCode.getRunningTrackCapabilities();
-        supportsTorch = cap && cap.torch === true;
-        if(supportsTorch) toggleTorchBtn.style.display='inline-block';
-      } catch(e){ /* ignore */ }
-
-      scannerStatus.textContent = 'Escaneo activo. Apunta al QR.';
-    } catch(err){
-      console.error('Error al iniciar cámara:', err);
-      scannerStatus.innerHTML = '<span class="danger">Error al abrir la cámara: ' + (err && err.message ? err.message : err) + '</span>';
-      html5QrCode = null;
-    }
+/* ---------- UI Events ---------- */
+startBtn.addEventListener('click', async ()=>{
+  const cams = await populateCameras();
+  if (cams.length === 0){
+    alert('No se detectaron cámaras. Conéctate a un dispositivo con cámara o revisa permisos.');
+    return;
   }
+  const deviceId = cameraSelect.value || cams[0].deviceId;
+  await startStream(deviceId);
+  startBtn.style.display='none';
+  stopBtn.style.display='inline-block';
+});
 
-  async function stopScanner(){
-    if(!html5QrCode) {
-      scannerStatus.textContent = 'Escáner no está activo.';
-      return;
-    }
-    try{
-      await html5QrCode.stop();
-      await html5QrCode.clear();
-    }catch(e){ console.warn('stop error', e); }
-    html5QrCode = null;
-    scannerStatus.textContent = 'Escáner detenido.';
+stopBtn.addEventListener('click', ()=>{
+  stopStream();
+  startBtn.style.display='inline-block';
+  stopBtn.style.display='none';
+});
+
+cameraSelect.addEventListener('change', async ()=>{
+  if (stream) {
+    await startStream(cameraSelect.value);
   }
+});
 
-  function qrCodeErrorCallback(errorMessage){
-    // console.debug('QR error', errorMessage);
-  }
-
-  let lastScanTime = 0;
-  async function qrCodeSuccessCallback(decodedText, decodedResult){
-    const now = Date.now();
-    // debounce: ignore scans en menos de 1s
-    if(now - lastScanTime < 1000) return;
-    lastScanTime = now;
-
-    scannerStatus.textContent = `QR detectado: ${decodedText}`;
-    // Try parse JSON
-    let data = {};
-    try {
-      data = JSON.parse(decodedText);
-      // expected keys nombre, grado, hora, telefono
-    } catch(e){
-      // If not JSON, try CSV or pipe-separated: "nombre,grado,hora,telefono"
-      const partsComma = decodedText.split(',');
-      const partsPipe = decodedText.split('|');
-      const partsSemi = decodedText.split(';');
-      let parts = partsComma.length >= 4 ? partsComma : (partsPipe.length >=4 ? partsPipe : (partsSemi.length >=4 ? partsSemi : null));
-      if(parts){
-        data = {
-          nombre: parts[0]?.trim(),
-          grado: parts[1]?.trim(),
-          hora: parts[2]?.trim(),
-          telefono: parts[3]?.trim()
-        };
-      } else {
-        // If nothing matched, place whole text into nombre for manual fix
-        data = { nombre: decodedText, grado:'', hora:'', telefono:'' };
-      }
-    }
-
-    const record = {
-      nombre: data.nombre || '',
-      grado: data.grado || '',
-      hora: data.hora || '',
-      telefono: data.telefono || '',
-      fecha: new Date().toLocaleString()
-    };
-
-    // fill the manual form so user can edit if needed
-    inputNombre.value = record.nombre;
-    inputGrado.value = record.grado;
-    inputHora.value = record.hora;
-    inputTelefono.value = record.telefono;
-
-    // Save automatically
-    addRecord(record);
-
-    // If user wants to open WhatsApp automatically
-    if(autoWhatsapp.value === 'yes' && record.telefono){
-      const url = makeWhatsUrl(record.telefono, record);
-      // stop scanner before opening external app (prevents camera freeze)
-      try{ await stopScanner(); } catch(e){}
-      window.open(url, '_blank');
-    }
-  }
-
-  // Torch toggle (if available)
-  toggleTorchBtn.addEventListener('click', async () => {
-    if(!html5QrCode) return alert('Inicia la cámara primero');
-    try {
-      torchOn = !torchOn;
-      await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
-      toggleTorchBtn.textContent = torchOn ? 'Apagar linterna' : 'Encender linterna';
-    } catch(e){
-      alert('No disponible: ' + (e && e.message ? e.message : e));
-    }
-  });
-
-  // Helper to get media track capabilities via underlying implementation (try-catch for safety)
-  Html5Qrcode.prototype.getRunningTrackCapabilities = async function(){
-    try {
-      const stream = this._oLocalMediaStream; // internal reference in html5-qrcode lib
-      if(stream && stream.getVideoTracks && stream.getVideoTracks().length){
-        const track = stream.getVideoTracks()[0];
-        if(track && typeof track.getCapabilities === 'function'){
-          return track.getCapabilities();
+importBtn.addEventListener('click', ()=> {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = async () => {
+      // draw on canvas and try detect
+      const w=img.width,h=img.height;
+      canvas.width=w; canvas.height=h; ctx.drawImage(img,0,0);
+      try{
+        if (barcodeDetector){
+          const res = await barcodeDetector.detect(canvas);
+          if (res && res.length) { handleDetected(res[0].rawValue||res[0].rawData); return; }
         }
-      }
-    } catch(e){ /* ignore */ }
-    return null;
+        // fallback: try to read text from QR as raw (no native fallback here)
+        alert('No se detectó QR en la imagen o tu navegador no soporta BarcodeDetector.');
+      }catch(err){ alert('Error procesando imagen: ' + (err.message||err)); }
+    };
+    img.src = URL.createObjectURL(f);
   };
+  inp.click();
+});
 
-  // When the page unloads, stop camera
-  window.addEventListener('pagehide', async () => { if(html5QrCode) try{ await html5QrCode.stop(); } catch(e){} });
+clearBtn.addEventListener('click', ()=>{
+  if (!confirm('Borrar TODOS los registros?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  refreshUI();
+});
 
-  // init small guidance
-  scannerStatus.textContent = 'Presiona "Iniciar cámara" para comenzar. Si no funciona, revisa permisos del navegador.';
+exportCsv.addEventListener('click', ()=>{
+  const arr = loadScans();
+  if (!arr.length) { alert('Sin datos para exportar'); return; }
+  const header = ['id','name','raw','origin','iso','display'];
+  const rows = arr.map(r => header.map(h => `"${String(r[h]||'').replace(/"/g,'""')}"`).join(','));
+  const csv = [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download = `qr_registros_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+searchInput.addEventListener('input', refreshUI);
+searchClear.addEventListener('click', ()=>{ searchInput.value=''; refreshUI; });
+
+/* ---------- Init ---------- */
+(async function init(){
+  // mostrar soporte
+  detectorSupport.textContent = ('BarcodeDetector' in window) ? 'Verificando...' : 'No';
+  await populateCameras();
+  // si barcode detector es soportado, init
+  if ('BarcodeDetector' in window){
+    try{
+      // comprobar que la implementación soporte qr_code
+      const supported = await BarcodeDetector.getSupportedFormats();
+      if (supported && supported.includes('qr_code')){
+        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        detectorSupport.textContent = 'Sí (qr_code)';
+      } else {
+        detectorSupport.textContent = 'No (qr_code no soportado)';
+      }
+    }catch(e){
+      console.warn('BarcodeDetector init err', e);
+      detectorSupport.textContent = 'No (error)';
+    }
+  } else {
+    detectorSupport.textContent = 'No';
+  }
+
+  // cargar historial
+  refreshUI();
+})();
 </script>
 </body>
 </html>
