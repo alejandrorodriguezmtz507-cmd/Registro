@@ -1,21 +1,21 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Escáner QR + Alerta Telegram</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-body{font-family:Arial, sans-serif;background:#101820;color:#fff;padding:14px;text-align:center}
-#reader{width:100%;max-width:420px;margin:auto;border-radius:12px;overflow:hidden}
-button{margin:6px;padding:8px 12px;border:none;border-radius:10px;cursor:pointer;font-weight:700}
-.btn-start{background:#00e676;color:#003300}
-.btn-stop{background:#e53935;color:#fff}
-.btn-alert{background:#0277bd;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px}
-table{width:100%;max-width:650px;margin:14px auto;border-collapse:collapse}
-th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);text-align:center;font-size:14px}
-th{background:#1b2a40}
-#status{margin-top:8px;color:#9fc7d9}
+body {font-family:Arial,sans-serif;background:#101820;color:#fff;padding:14px;text-align:center;}
+#reader {width:100%;max-width:420px;margin:auto;border-radius:12px;overflow:hidden;}
+button {margin:6px;padding:8px 12px;border:none;border-radius:10px;cursor:pointer;font-weight:700;}
+.btn-start{background:#00e676;color:#003300;}
+.btn-stop{background:#e53935;color:#fff;}
+.btn-alert{background:#0277bd;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px;}
+table{width:100%;max-width:650px;margin:14px auto;border-collapse:collapse;}
+th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);text-align:center;font-size:14px;}
+th{background:#1b2a40;}
+#status{margin-top:8px;color:#9fc7d9;}
 </style>
 </head>
 <body>
@@ -35,97 +35,97 @@ th{background:#1b2a40}
 <p id="status">Listo.</p>
 
 <script>
-const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8   "; // 👈 tu token de bot
-const CHAT_IDS = [8290866315  ,987654321]; // 👈 tus IDs o grupos
+const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8   "; // tu token
+const CHAT_IDS = [8290866315   , TU_ID2]; // tus IDs
 const STORAGE_KEY = "registros_qr_telegram";
 
-let html5QrCode;
+let html5QrCode = null;
 let isScanning = false;
 
-function log(msg){ console.log("[APP]", msg); document.getElementById('status').textContent = msg; }
+function log(msg){ 
+    console.log("[APP]", msg); 
+    document.getElementById('status').textContent = msg; 
+}
+
 function hora(){ return new Date().toLocaleString('es-MX',{hour12:false}); }
 
 function guardar(r){
-  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
-  data.unshift(r);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+    data.unshift(r);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 function mostrar(){
-  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = "";
-  data.forEach((r,i)=>{
-    tbody.innerHTML += `<tr>
-      <td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>
-      <td><button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button></td>
-    </tr>`;
-  });
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = "";
+    data.forEach((r,i)=>{
+        tbody.innerHTML += `<tr>
+            <td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>
+            <td><button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button></td>
+        </tr>`;
+    });
 }
 
 async function enviar(idx){
-  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
-  const r = data[idx];
-  if(!r){ alert("No existe el registro"); return; }
-  const mensaje = `🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
-  
-  for(const chat of CHAT_IDS){
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
-    try{
-      // usamos proxy para evitar CORS
-      const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
-      const res = await fetch(proxy);
-      if(res.ok){
-        log(`✅ Enviado a ${chat}`);
-      }else{
-        throw new Error("Respuesta no OK");
-      }
-    }catch(e){
-      log(`⚠️ Error al enviar: ${e.message}`);
-      // fallback: abrir en pestaña (permite envío manual)
-      window.open(url, "_blank");
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+    const r = data[idx];
+    if(!r){ alert("No existe el registro"); return; }
+    const mensaje = `🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
+    for(const chat of CHAT_IDS){
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
+        try{
+            const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+            const res = await fetch(proxy);
+            if(res.ok){ log(`✅ Enviado a ${chat}`); }
+            else{ throw new Error("Respuesta no OK"); }
+        }catch(e){
+            log(`⚠️ Error al enviar: ${e.message}`);
+            window.open(url,"_blank");
+        }
     }
-  }
-  alert("Mensaje enviado (o intentado). Revisa tu Telegram.");
+    alert("Mensaje enviado (o intentado). Revisa tu Telegram.");
 }
 
 function procesar(txt){
-  try{
-    const data = JSON.parse(txt);
-    const r = {
-      nombre: data.nombre || data.name || txt,
-      telefono: data.telefono || data.phone || "",
-      hora: hora()
-    };
-    guardar(r); mostrar(); log("✅ Registro guardado: "+r.nombre);
-  }catch(e){
-    log("⚠️ Código QR inválido");
-  }
+    try{
+        const data = JSON.parse(txt);
+        const r = { nombre: data.nombre||data.name||txt, telefono: data.telefono||data.phone||"", hora: hora() };
+        guardar(r); mostrar(); log("✅ Registro guardado: "+r.nombre);
+    }catch(e){
+        log("⚠️ Código QR inválido");
+    }
 }
 
 document.getElementById('startBtn').onclick = async ()=>{
-  try{
+    if(isScanning) return;
     html5QrCode = new Html5Qrcode("reader");
-    await html5QrCode.start({facingMode:"environment"},
-      {fps:10, qrbox:250},
-      procesar
-    );
-    isScanning = true;
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
-    log("📷 Escaneando...");
-  }catch(err){
-    log("Error al iniciar cámara: "+err.message);
-  }
+    try{
+        const devices = await Html5Qrcode.getCameras();
+        if(devices && devices.length){
+            const cameraId = devices[0].id; // cámara trasera
+            await html5QrCode.start(
+                cameraId,
+                {fps:10, qrbox:250},
+                procesar
+            );
+            isScanning = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            log("📷 Escaneando...");
+        } else { log("⚠️ No se encontró cámara"); }
+    }catch(err){ log("Error al iniciar cámara: "+err.message); }
 };
 
 document.getElementById('stopBtn').onclick = async ()=>{
-  if(isScanning){
-    await html5QrCode.stop(); await html5QrCode.clear();
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
-    log("Cámara detenida");
-  }
+    if(isScanning){
+        await html5QrCode.stop();
+        await html5QrCode.clear();
+        isScanning = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        log("Cámara detenida");
+    }
 };
 
 mostrar();
