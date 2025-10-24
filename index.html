@@ -3,161 +3,132 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Escáner QR + Botón Alerta Telegram</title>
+<title>Escáner QR + Alerta Telegram</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-body{font-family:Arial;background:#0f172a;color:#fff;text-align:center;padding:10px}
-#reader{width:100%;max-width:380px;margin:auto;border-radius:12px;overflow:hidden}
-button{margin:4px;padding:8px 14px;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
-.btn-start{background:#00c853;color:white}
-.btn-stop{background:#d32f2f;color:white}
-.btn-clear{background:#ff9800;color:white}
-.btn-alert{background:#0288d1;color:white;font-size:12px}
-#status{margin-top:10px;font-size:14px;color:#a9c7d2}
-table{width:100%;max-width:520px;margin:auto;margin-top:15px;border-collapse:collapse}
-th,td{border-bottom:1px solid rgba(255,255,255,0.2);padding:6px;font-size:13px;text-align:center}
-th{background:#1c2a4a}
-td{color:#e2e8f0}
+body{font-family:Arial, sans-serif;background:#101820;color:#fff;padding:14px;text-align:center}
+#reader{width:100%;max-width:420px;margin:auto;border-radius:12px;overflow:hidden}
+button{margin:6px;padding:8px 12px;border:none;border-radius:10px;cursor:pointer;font-weight:700}
+.btn-start{background:#00e676;color:#003300}
+.btn-stop{background:#e53935;color:#fff}
+.btn-alert{background:#0277bd;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px}
+table{width:100%;max-width:650px;margin:14px auto;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);text-align:center;font-size:14px}
+th{background:#1b2a40}
+#status{margin-top:8px;color:#9fc7d9}
 </style>
 </head>
 <body>
-<h2>📷 Escáner QR - Registro + Botón Telegram</h2>
-<p>Escanea un QR con nombre y teléfono. Guarda los registros y manda alerta por Telegram manualmente.</p>
+<h2>📱 Escáner QR + Envío de alerta a Telegram</h2>
+<p>Escanea códigos QR con formato JSON (nombre y teléfono) y usa el botón para enviar alerta.</p>
 
 <div id="reader"></div>
-<div>
-  <button id="startBtn" class="btn-start">Iniciar cámara</button>
-  <button id="stopBtn" class="btn-stop" disabled>Detener</button>
-  <button id="clearBtn" class="btn-clear">Borrar registros</button>
-</div>
-<p id="status">Listo para iniciar</p>
+<button id="startBtn" class="btn-start">Iniciar escaneo</button>
+<button id="stopBtn" class="btn-stop" disabled>Detener</button>
 
 <h3>📋 Registros</h3>
 <table>
-  <thead>
-    <tr><th>Nombre</th><th>Teléfono</th><th>Hora</th><th>Acción</th></tr>
-  </thead>
-  <tbody id="tableBody"></tbody>
+<thead><tr><th>Nombre</th><th>Teléfono</th><th>Hora</th><th>Acción</th></tr></thead>
+<tbody id="tableBody"></tbody>
 </table>
 
-<script>
-// 🟢 Configuración del Bot Telegram
-const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8 ";  // <- Pega aquí el token de tu bot
-const CHAT_IDS = [8290866315 , 987654321]; // <- IDs de los usuarios que recibirán el mensaje
+<p id="status">Listo.</p>
 
-const STORAGE_KEY = "qr_registros_v3";
+<script>
+const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8   "; // 👈 tu token de bot
+const CHAT_IDS = [8290866315  ,987654321]; // 👈 tus IDs o grupos
+const STORAGE_KEY = "registros_qr_telegram";
+
 let html5QrCode;
 let isScanning = false;
 
-function cargarRegistros(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){return[]}}
-function guardarRegistros(arr){localStorage.setItem(STORAGE_KEY,JSON.stringify(arr))}
+function log(msg){ console.log("[APP]", msg); document.getElementById('status').textContent = msg; }
+function hora(){ return new Date().toLocaleString('es-MX',{hour12:false}); }
 
-function mostrarTabla(){
-  const tbody=document.getElementById('tableBody');
-  const registros=cargarRegistros();
-  tbody.innerHTML="";
-  if(registros.length===0){
-    tbody.innerHTML=`<tr><td colspan="4" style="opacity:0.7">Sin registros</td></tr>`;
-  }else{
-    registros.forEach((r,idx)=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML=`
-        <td>${r.nombre}</td>
-        <td>${r.telefono}</td>
-        <td>${r.hora}</td>
-        <td><button class='btn-alert' onclick='enviarTelegram(${idx})'>📩 Enviar alerta</button></td>`;
-      tbody.appendChild(tr);
-    });
-  }
+function guardar(r){
+  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+  data.unshift(r);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-function obtenerHora(){
-  const d=new Date();
-  return d.toLocaleString('es-MX',{hour12:false});
-}
-
-function procesarQR(txt){
-  let nombre="",telefono="";
-  try{
-    const data=JSON.parse(txt);
-    nombre=data.nombre||data.name||txt;
-    telefono=data.telefono||data.phone||"";
-  }catch(e){nombre=txt}
-  const hora=obtenerHora();
-  const registro={nombre,telefono,hora};
-  const registros=cargarRegistros();
-  registros.unshift(registro);
-  guardarRegistros(registros);
-  mostrarTabla();
-
-  document.getElementById('status').textContent=`✅ Escaneado: ${nombre} (${telefono||"sin teléfono"}) a las ${hora}`;
-  navigator.vibrate?.(120);
-}
-
-// 📨 Enviar alerta manual a Telegram
-function enviarTelegram(index){
-  const registros = cargarRegistros();
-  const r = registros[index];
-  if(!r) return;
-  const mensaje = `🚍 Registro detectado:\n👤 ${r.nombre}\n📱 ${r.telefono||"Sin teléfono"}\n🕒 ${r.hora}`;
-  const proxy = "https://api.allorigins.win/raw?url="; // ✅ Evita error CORS
-
-  CHAT_IDS.forEach(id => {
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${id}&text=${encodeURIComponent(mensaje)}`;
-    fetch(proxy + encodeURIComponent(url))
-      .then(r=>r.text())
-      .then(()=>{
-        alert(`✅ Alerta enviada a Telegram:\n${r.nombre}`);
-      })
-      .catch(err=>{
-        console.error("Error enviando a Telegram:", err);
-        alert("⚠️ Error al enviar alerta. Revisa el token o chat_id.");
-      });
+function mostrar(){
+  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = "";
+  data.forEach((r,i)=>{
+    tbody.innerHTML += `<tr>
+      <td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>
+      <td><button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button></td>
+    </tr>`;
   });
 }
 
-async function startCamera(){
-  if(isScanning)return;
-  const status=document.getElementById('status');
+async function enviar(idx){
+  const data = JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");
+  const r = data[idx];
+  if(!r){ alert("No existe el registro"); return; }
+  const mensaje = `🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
+  
+  for(const chat of CHAT_IDS){
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
+    try{
+      // usamos proxy para evitar CORS
+      const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+      const res = await fetch(proxy);
+      if(res.ok){
+        log(`✅ Enviado a ${chat}`);
+      }else{
+        throw new Error("Respuesta no OK");
+      }
+    }catch(e){
+      log(`⚠️ Error al enviar: ${e.message}`);
+      // fallback: abrir en pestaña (permite envío manual)
+      window.open(url, "_blank");
+    }
+  }
+  alert("Mensaje enviado (o intentado). Revisa tu Telegram.");
+}
+
+function procesar(txt){
   try{
-    html5QrCode=new Html5Qrcode("reader");
-    const config={fps:10,qrbox:{width:250,height:250}};
-    await html5QrCode.start({facingMode:{exact:"environment"}},config,qrText=>{procesarQR(qrText)});
-    isScanning=true;
-    status.textContent="Escaneando... apunta al QR";
-    document.getElementById('startBtn').disabled=true;
-    document.getElementById('stopBtn').disabled=false;
+    const data = JSON.parse(txt);
+    const r = {
+      nombre: data.nombre || data.name || txt,
+      telefono: data.telefono || data.phone || "",
+      hora: hora()
+    };
+    guardar(r); mostrar(); log("✅ Registro guardado: "+r.nombre);
+  }catch(e){
+    log("⚠️ Código QR inválido");
+  }
+}
+
+document.getElementById('startBtn').onclick = async ()=>{
+  try{
+    html5QrCode = new Html5Qrcode("reader");
+    await html5QrCode.start({facingMode:"environment"},
+      {fps:10, qrbox:250},
+      procesar
+    );
+    isScanning = true;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    log("📷 Escaneando...");
   }catch(err){
-    status.textContent="⚠️ Error al iniciar cámara: "+err.message;
-    alert("No se pudo iniciar la cámara.\nActiva permisos o usa HTTPS.");
+    log("Error al iniciar cámara: "+err.message);
   }
-}
+};
 
-async function stopCamera(){
-  const status=document.getElementById('status');
-  if(html5QrCode&&isScanning){
-    await html5QrCode.stop().catch(()=>{});
-    await html5QrCode.clear();
-    isScanning=false;
-    document.getElementById('startBtn').disabled=false;
-    document.getElementById('stopBtn').disabled=true;
-    status.textContent="Cámara detenida.";
+document.getElementById('stopBtn').onclick = async ()=>{
+  if(isScanning){
+    await html5QrCode.stop(); await html5QrCode.clear();
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    log("Cámara detenida");
   }
-}
+};
 
-function limpiarRegistros(){
-  if(confirm("¿Borrar todos los registros?")){
-    localStorage.removeItem(STORAGE_KEY);
-    mostrarTabla();
-  }
-}
-
-document.getElementById('startBtn').onclick=startCamera;
-document.getElementById('stopBtn').onclick=stopCamera;
-document.getElementById('clearBtn').onclick=limpiarRegistros;
-
-// Mostrar registros al cargar
-mostrarTabla();
+mostrar();
 </script>
 </body>
 </html>
