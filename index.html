@@ -27,76 +27,76 @@
 </style>
 </head>
 <body>
-  <div class="app">
-    <div class="card">
-      <h1>Escáner QR — Registro</h1>
-      <div id="videoWrap">
-        <video id="video" autoplay muted playsinline></video>
-        <div id="noCamMsg" style="position:absolute; color:#bfe9f7; text-align:center; padding:12px; display:none">
-          Cámara no iniciada
-        </div>
-      </div>
-
-      <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between">
-        <div style="display:flex; gap:8px; align-items:center">
-          <label class="muted">Cámara:</label>
-          <select id="cameraSelect"></select>
-        </div>
-        <div class="muted" id="statusText">Estado: esperando</div>
-      </div>
-
-      <div class="controls" style="margin-top:10px">
-        <button id="startBtn">Iniciar</button>
-        <button id="stopBtn" style="display:none;background:#ff6b6b">Detener</button>
-        <button id="importBtn" style="background:#ffd166;color:#111">Importar imagen</button>
-        <button id="clearBtn" style="background:#6be0a1;color:#053">Limpiar historial</button>
-      </div>
-
-      <div style="margin-top:12px" class="muted">
-        <div>Detector nativo: <span id="detectorSupport">—</span></div>
-        <div style="margin-top:6px">Si tu navegador NO soporta <code>BarcodeDetector</code>, la app te pedirá usar la librería externa o importar imagen.</div>
+<div class="app">
+  <div class="card">
+    <h1>Escáner QR — Registro</h1>
+    <div id="videoWrap">
+      <video id="video" autoplay muted playsinline></video>
+      <div id="noCamMsg" style="position:absolute; color:#bfe9f7; text-align:center; padding:12px; display:none">
+        Cámara no iniciada
       </div>
     </div>
 
-    <div class="card">
-      <h1>Historial y contadores</h1>
-      <div style="display:flex; gap:12px; margin-bottom:8px">
-        <div style="flex:1">
-          <div class="muted">Total</div>
-          <div id="totalCount" style="font-size:26px;font-weight:800">0</div>
-        </div>
-        <div style="flex:1">
-          <div class="muted">Únicos</div>
-          <div id="uniqueCount" style="font-size:26px;font-weight:800">0</div>
-        </div>
-        <div style="flex:1">
-          <div class="muted">Hoy</div>
-          <div id="todayCount" style="font-size:26px;font-weight:800">0</div>
-        </div>
+    <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between">
+      <div style="display:flex; gap:8px; align-items:center">
+        <label class="muted">Cámara:</label>
+        <select id="cameraSelect"></select>
       </div>
+      <div class="muted" id="statusText">Estado: esperando</div>
+    </div>
 
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
-        <input id="search" placeholder="Buscar por nombre o fecha" style="flex:1"/>
-        <button id="searchClear" style="background:#c7f9e8;color:#053">Limpiar</button>
-        <button id="exportCsv" style="background:#ffd166;color:#111">Exportar CSV</button>
-      </div>
+    <div class="controls" style="margin-top:10px">
+      <button id="startBtn">Iniciar</button>
+      <button id="stopBtn" style="display:none;background:#ff6b6b">Detener</button>
+      <button id="importBtn" style="background:#ffd166;color:#111">Importar imagen</button>
+      <button id="clearBtn" style="background:#6be0a1;color:#053">Limpiar historial</button>
+    </div>
 
-      <div style="max-height:420px; overflow:auto;">
-        <table>
-          <thead>
-            <tr><th>Nombre</th><th>Fecha / Hora</th><th>Origen</th><th></th></tr>
-          </thead>
-          <tbody id="historyBody"></tbody>
-        </table>
-      </div>
-
-      <div style="margin-top:10px; color:#bfe9f7; font-size:13px">
-        Guardado en <strong>localStorage</strong> del navegador — permanece en tu dispositivo.
-      </div>
+    <div style="margin-top:12px" class="muted">
+      <div>Detector nativo: <span id="detectorSupport">—</span></div>
+      <div style="margin-top:6px">Si tu navegador NO soporta <code>BarcodeDetector</code>, la app te pedirá usar la librería externa o importar imagen.</div>
     </div>
   </div>
 
-  <div id="toast" class="toast" style="display:none"></div>
+  <div class="card">
+    <h1>Historial y contadores</h1>
+    <div style="display:flex; gap:12px; margin-bottom:8px">
+      <div style="flex:1">
+        <div class="muted">Total</div>
+        <div id="totalCount" style="font-size:26px;font-weight:800">0</div>
+      </div>
+      <div style="flex:1">
+        <div class="muted">Únicos</div>
+        <div id="uniqueCount" style="font-size:26px;font-weight:800">0</div>
+      </div>
+      <div style="flex:1">
+        <div class="muted">Hoy</div>
+        <div id="todayCount" style="font-size:26px;font-weight:800">0</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+      <input id="search" placeholder="Buscar por nombre o fecha" style="flex:1"/>
+      <button id="searchClear" style="background:#c7f9e8;color:#053">Limpiar</button>
+      <button id="exportCsv" style="background:#ffd166;color:#111">Exportar CSV</button>
+    </div>
+
+    <div style="max-height:420px; overflow:auto;">
+      <table>
+        <thead>
+          <tr><th>Nombre</th><th>Fecha / Hora</th><th>Origen</th><th></th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:10px; color:#bfe9f7; font-size:13px">
+      Guardado en <strong>localStorage</strong> del navegador — permanece en tu dispositivo.
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
 
 <script>
 /* ---------- Config y storage ---------- */
@@ -140,8 +140,8 @@ function loadScans(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||
 function saveScans(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); refreshUI(); }
 
 /* ---------- Telegram Bot ---------- */
-const BOT_TOKEN = '8188740505:AAFMJio9moB3PtypRlqMHrCobmTVTRo7Vy0   ';
-const CHAT_ID = '8290866315  ';
+const BOT_TOKEN = 'TU_BOT_TOKEN_AQUI';
+const CHAT_ID = 'TU_CHAT_ID_AQUI';
 
 async function sendTelegramMessage(text){
   try{
@@ -155,20 +155,17 @@ async function sendTelegramMessage(text){
   }
 }
 
-/* ---------- Enviar lista completa al bot ---------- */
 function sendFullListToTelegram(){
   const arr = loadScans();
   if (!arr.length) return;
-  
   let msg = `📋 <b>Lista de registros escaneados:</b>\n\n`;
   arr.forEach((item,i)=>{
     msg += `${i+1}. <b>Nombre:</b> ${item.name}\n   <b>Origen:</b> ${item.origin}\n   <b>Fecha:</b> ${item.display}\n\n`;
   });
-  
   sendTelegramMessage(msg);
 }
 
-/* ---------- Camera device list ---------- */
+/* ---------- Camera ---------- */
 async function populateCameras(){
   try{
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -181,14 +178,10 @@ async function populateCameras(){
       cameraSelect.appendChild(opt);
     });
     return cams;
-  }catch(e){
-    console.error('enumerateDevices', e);
-    return [];
-  }
+  }catch(e){ console.error(e); return []; }
 }
 
-/* ---------- Start / Stop stream ---------- */
-async function startStream(deviceId){
+async function startStreamasync function startStream(deviceId){
   stopStream();
   try{
     const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' } , audio:false };
@@ -204,6 +197,7 @@ async function startStream(deviceId){
     alert('Error al acceder a la cámara: ' + (err.message || err));
   }
 }
+
 function stopStream(){
   processing = false;
   if (stream){
@@ -221,18 +215,12 @@ const ctx = canvas.getContext('2d');
 
 async function startDetectionLoop(){
   if (!processing) return;
+
   if (!barcodeDetector){
     if ('BarcodeDetector' in window){
-      try {
-        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-        detectorSupport.textContent = 'Sí (nativo)';
-      } catch(e){
-        console.warn('BarcodeDetector init failed', e);
-        detectorSupport.textContent = 'No (error)';
-      }
-    } else {
-      detectorSupport.textContent = 'No';
-    }
+      try { barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] }); detectorSupport.textContent = 'Sí (nativo)'; }
+      catch(e){ console.warn('BarcodeDetector init failed', e); detectorSupport.textContent = 'No (error)'; }
+    } else { detectorSupport.textContent = 'No'; }
   }
 
   async function loop(){
@@ -240,9 +228,7 @@ async function startDetectionLoop(){
     if (video.readyState >= 2){
       const w = video.videoWidth, h = video.videoHeight;
       if (w && h){
-        canvas.width = w;
-        canvas.height = h;
-        ctx.drawImage(video, 0, 0, w, h);
+        canvas.width = w; canvas.height = h; ctx.drawImage(video,0,0,w,h);
         try{
           if (barcodeDetector){
             const result = await barcodeDetector.detect(canvas);
@@ -250,9 +236,7 @@ async function startDetectionLoop(){
               handleDetected(result[0].rawValue || result[0].rawData || JSON.stringify(result[0]));
             }
           }
-        }catch(e){
-          console.debug('detect error', e);
-        }
+        }catch(e){ console.debug('detect error', e); }
       }
     }
     setTimeout(()=>{ if (processing) requestAnimationFrame(loop); }, 80);
@@ -260,7 +244,7 @@ async function startDetectionLoop(){
   loop();
 }
 
-/* ---------- Handle detection (debounce) ---------- */
+/* ---------- Handle detection ---------- */
 function handleDetected(text){
   const now = Date.now();
   if (!text) return;
@@ -276,6 +260,9 @@ function handleDetected(text){
   addScan(name, text, 'camara');
   showToast('Registrado: ' + name, 1400);
   navigator.vibrate?.(80);
+
+  // enviar lista completa a Telegram cada vez que se agrega un nuevo registro
+  sendFullListToTelegram();
 }
 
 /* ---------- Scans management ---------- */
@@ -285,9 +272,6 @@ function addScan(name, raw, origin='camara'){
   const arr = loadScans();
   arr.unshift(item);
   saveScans(arr);
-
-  // Enviar lista completa al bot
-  sendFullListToTelegram();
 }
 
 function refreshUI(){
@@ -332,10 +316,7 @@ function escapeHtml(s=''){ return String(s).replace(/[&<>"'`=\/]/g, ch => ({'&':
 /* ---------- UI Events ---------- */
 startBtn.addEventListener('click', async ()=>{
   const cams = await populateCameras();
-  if (cams.length === 0){
-    alert('No se detectaron cámaras. Conéctate a un dispositivo con cámara o revisa permisos.');
-    return;
-  }
+  if (cams.length === 0){ alert('No se detectaron cámaras.'); return; }
   const deviceId = cameraSelect.value || cams[0].deviceId;
   await startStream(deviceId);
   startBtn.style.display='none';
@@ -349,7 +330,7 @@ stopBtn.addEventListener('click', ()=>{
 });
 
 cameraSelect.addEventListener('change', async ()=>{
-  if (stream) await startStream(cameraSelect.value);
+  if (stream) { await startStream(cameraSelect.value); }
 });
 
 importBtn.addEventListener('click', ()=> {
@@ -382,7 +363,6 @@ clearBtn.addEventListener('click', ()=>{
 });
 
 exportCsv.addEventListener('click', ()=>{
-  const arrexportCsv.addEventListener('click', ()=>{
   const arr = loadScans();
   if (!arr.length) { alert('Sin datos para exportar'); return; }
   const header = ['id','name','raw','origin','iso','display'];
@@ -411,16 +391,9 @@ searchClear.addEventListener('click', ()=>{ searchInput.value=''; refreshUI; });
       if (supported && supported.includes('qr_code')){
         barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
         detectorSupport.textContent = 'Sí (qr_code)';
-      } else {
-        detectorSupport.textContent = 'No (qr_code no soportado)';
-      }
-    }catch(e){
-      console.warn('BarcodeDetector init err', e);
-      detectorSupport.textContent = 'No (error)';
-    }
-  } else {
-    detectorSupport.textContent = 'No';
-  }
+      } else { detectorSupport.textContent = 'No (qr_code no soportado)'; }
+    }catch(e){ console.warn('BarcodeDetector init err', e); detectorSupport.textContent = 'No (error)'; }
+  } else { detectorSupport.textContent = 'No'; }
 
   refreshUI();
 })();
