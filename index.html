@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Registro QR (BarcodeDetector)</title>
+<title>Registro QR (BarcodeDetector + Telegram)</title>
 <style>
   :root{
     --bg:#071428; --card:#0b2540; --accent:#ff7a59; --glass: rgba(255,255,255,0.04);
@@ -139,6 +139,35 @@ function nowLocal(){
 function loadScans(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch(e){return []}}
 function saveScans(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); refreshUI(); }
 
+/* ---------- Telegram Bot ---------- */
+const BOT_TOKEN = '8188740505:AAFMJio9moB3PtypRlqMHrCobmTVTRo7Vy0   ';
+const CHAT_ID = '8290866315  ';
+
+async function sendTelegramMessage(text){
+  try{
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ chat_id: CHAT_ID, text: text, parse_mode:'HTML' })
+    });
+  }catch(err){
+    console.error('Error Telegram', err);
+  }
+}
+
+/* ---------- Enviar lista completa al bot ---------- */
+function sendFullListToTelegram(){
+  const arr = loadScans();
+  if (!arr.length) return;
+  
+  let msg = `📋 <b>Lista de registros escaneados:</b>\n\n`;
+  arr.forEach((item,i)=>{
+    msg += `${i+1}. <b>Nombre:</b> ${item.name}\n   <b>Origen:</b> ${item.origin}\n   <b>Fecha:</b> ${item.display}\n\n`;
+  });
+  
+  sendTelegramMessage(msg);
+}
+
 /* ---------- Camera device list ---------- */
 async function populateCameras(){
   try{
@@ -186,17 +215,15 @@ function stopStream(){
   statusText.textContent = 'Estado: detenido';
 }
 
-/* ---------- Detection loop usando BarcodeDetector (o fallback) ---------- */
+/* ---------- Detection loop usando BarcodeDetector ---------- */
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
 async function startDetectionLoop(){
   if (!processing) return;
-  // preparar detector si no existe
   if (!barcodeDetector){
     if ('BarcodeDetector' in window){
       try {
-        // preferimos solo QR
         barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
         detectorSupport.textContent = 'Sí (nativo)';
       } catch(e){
@@ -208,11 +235,9 @@ async function startDetectionLoop(){
     }
   }
 
-  // loop
   async function loop(){
     if (!processing || !stream) return;
     if (video.readyState >= 2){
-      // ajustar canvas al video actual
       const w = video.videoWidth, h = video.videoHeight;
       if (w && h){
         canvas.width = w;
@@ -220,21 +245,16 @@ async function startDetectionLoop(){
         ctx.drawImage(video, 0, 0, w, h);
         try{
           if (barcodeDetector){
-            // detect on canvas
             const result = await barcodeDetector.detect(canvas);
             if (result && result.length){
               handleDetected(result[0].rawValue || result[0].rawData || JSON.stringify(result[0]));
             }
-          } else {
-            // Fallback básico: no decode, solo muestra mensaje (instrucción)
-            // Para navegadores sin BarcodeDetector te pedimos usar import image o la librería externa
           }
         }catch(e){
           console.debug('detect error', e);
         }
       }
     }
-    // small delay to avoid high CPU: requestAnimationFrame is ok, but add micro-delay
     setTimeout(()=>{ if (processing) requestAnimationFrame(loop); }, 80);
   }
   loop();
@@ -244,11 +264,9 @@ async function startDetectionLoop(){
 function handleDetected(text){
   const now = Date.now();
   if (!text) return;
-  // evitar lecturas duplicadas inmediatas
   if (lastDetected.text === text && (now - lastDetected.ts) < 2000) return;
   lastDetected = { text, ts: now };
 
-  // parsear texto: si es JSON y contiene "name" o "nombre" usarlo
   let name = text;
   try{
     const j = JSON.parse(text);
@@ -267,11 +285,13 @@ function addScan(name, raw, origin='camara'){
   const arr = loadScans();
   arr.unshift(item);
   saveScans(arr);
+
+  // Enviar lista completa al bot
+  sendFullListToTelegram();
 }
 
 function refreshUI(){
   const arr = loadScans();
-  // filter by search
   const q = searchInput.value.trim().toLowerCase();
   const filtered = arr.filter(it => {
     if(!q) return true;
@@ -297,7 +317,6 @@ function refreshUI(){
   const todayKey = new Date().toISOString().slice(0,10);
   todayCountEl.textContent = arr.filter(x => x.iso.slice(0,10) === todayKey).length;
 
-  // attach delete handlers
   Array.from(document.getElementsByClassName('delBtn')).forEach(b=>{
     b.onclick = ()=> {
       if (!confirm('Eliminar registro?')) return;
@@ -330,9 +349,7 @@ stopBtn.addEventListener('click', ()=>{
 });
 
 cameraSelect.addEventListener('change', async ()=>{
-  if (stream) {
-    await startStream(cameraSelect.value);
-  }
+  if (stream) await startStream(cameraSelect.value);
 });
 
 importBtn.addEventListener('click', ()=> {
@@ -343,7 +360,6 @@ importBtn.addEventListener('click', ()=> {
     if (!f) return;
     const img = new Image();
     img.onload = async () => {
-      // draw on canvas and try detect
       const w=img.width,h=img.height;
       canvas.width=w; canvas.height=h; ctx.drawImage(img,0,0);
       try{
@@ -351,7 +367,6 @@ importBtn.addEventListener('click', ()=> {
           const res = await barcodeDetector.detect(canvas);
           if (res && res.length) { handleDetected(res[0].rawValue||res[0].rawData); return; }
         }
-        // fallback: try to read text from QR as raw (no native fallback here)
         alert('No se detectó QR en la imagen o tu navegador no soporta BarcodeDetector.');
       }catch(err){ alert('Error procesando imagen: ' + (err.message||err)); }
     };
@@ -367,47 +382,4 @@ clearBtn.addEventListener('click', ()=>{
 });
 
 exportCsv.addEventListener('click', ()=>{
-  const arr = loadScans();
-  if (!arr.length) { alert('Sin datos para exportar'); return; }
-  const header = ['id','name','raw','origin','iso','display'];
-  const rows = arr.map(r => header.map(h => `"${String(r[h]||'').replace(/"/g,'""')}"`).join(','));
-  const csv = [header.join(','), ...rows].join('\r\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download = `qr_registros_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`; a.click();
-  URL.revokeObjectURL(url);
-});
-
-searchInput.addEventListener('input', refreshUI);
-searchClear.addEventListener('click', ()=>{ searchInput.value=''; refreshUI; });
-
-/* ---------- Init ---------- */
-(async function init(){
-  // mostrar soporte
-  detectorSupport.textContent = ('BarcodeDetector' in window) ? 'Verificando...' : 'No';
-  await populateCameras();
-  // si barcode detector es soportado, init
-  if ('BarcodeDetector' in window){
-    try{
-      // comprobar que la implementación soporte qr_code
-      const supported = await BarcodeDetector.getSupportedFormats();
-      if (supported && supported.includes('qr_code')){
-        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-        detectorSupport.textContent = 'Sí (qr_code)';
-      } else {
-        detectorSupport.textContent = 'No (qr_code no soportado)';
-      }
-    }catch(e){
-      console.warn('BarcodeDetector init err', e);
-      detectorSupport.textContent = 'No (error)';
-    }
-  } else {
-    detectorSupport.textContent = 'No';
-  }
-
-  // cargar historial
-  refreshUI();
-})();
-</script>
-</body>
-</html>
+  const arr
