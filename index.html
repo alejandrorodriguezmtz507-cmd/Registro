@@ -382,4 +382,48 @@ clearBtn.addEventListener('click', ()=>{
 });
 
 exportCsv.addEventListener('click', ()=>{
-  const arr
+  const arrexportCsv.addEventListener('click', ()=>{
+  const arr = loadScans();
+  if (!arr.length) { alert('Sin datos para exportar'); return; }
+  const header = ['id','name','raw','origin','iso','display'];
+  const rows = arr.map(r => header.map(h => `"${String(r[h]||'').replace(/"/g,'""')}"`).join(','));
+  const csv = [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); 
+  a.href = url; 
+  a.download = `qr_registros_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`; 
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+searchInput.addEventListener('input', refreshUI);
+searchClear.addEventListener('click', ()=>{ searchInput.value=''; refreshUI; });
+
+/* ---------- Init ---------- */
+(async function init(){
+  detectorSupport.textContent = ('BarcodeDetector' in window) ? 'Verificando...' : 'No';
+  await populateCameras();
+  
+  if ('BarcodeDetector' in window){
+    try{
+      const supported = await BarcodeDetector.getSupportedFormats();
+      if (supported && supported.includes('qr_code')){
+        barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        detectorSupport.textContent = 'Sí (qr_code)';
+      } else {
+        detectorSupport.textContent = 'No (qr_code no soportado)';
+      }
+    }catch(e){
+      console.warn('BarcodeDetector init err', e);
+      detectorSupport.textContent = 'No (error)';
+    }
+  } else {
+    detectorSupport.textContent = 'No';
+  }
+
+  refreshUI();
+})();
+</script>
+</body>
+</html>
