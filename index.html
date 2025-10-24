@@ -1,4 +1,5 @@
-<meta name='viewport' content='width=device-width, initial-scale=1'/><!doctype html>
+<meta name='viewport' content='width=device-width, initial-scale=1'/>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -186,15 +187,35 @@
   });
 
   async function startCamera(){
-    if (html5QrScanner){ statusEl.textContent="El escáner ya está activo."; return; }
+    if (html5QrScanner){ 
+      statusEl.textContent="El escáner ya está activo."; 
+      return; 
+    }
     try {
       const devices = await Html5Qrcode.getCameras();
-      if (!devices || !devices.length){ alert("No se detectaron cámaras."); return; }
-      const cameraId = devices[0].id;
+      if (!devices || !devices.length){ 
+        alert("No se detectaron cámaras."); 
+        return; 
+      }
+
+      // Buscar cámara trasera (back/rear)
+      let cameraId = devices[0].id;
+      for(const cam of devices){
+        if(cam.label.toLowerCase().includes("back") || cam.label.toLowerCase().includes("rear")){
+          cameraId = cam.id;
+          break;
+        }
+      }
+
       html5QrScanner = new Html5Qrcode("reader");
       const config = { fps:10, qrbox:300 };
-      await html5QrScanner.start({ deviceId:{ exact:cameraId } }, config, onScanSuccess, (err)=>{});
-      statusEl.textContent = "Cámara iniciada. Apunta al QR.";
+      await html5QrScanner.start(
+        { deviceId: { exact: cameraId } },
+        config,
+        onScanSuccess,
+        (err)=>{}
+      );
+      statusEl.textContent = "Cámara trasera iniciada. Apunta al QR.";
     } catch(err){
       console.error(err);
       statusEl.textContent = "Error al iniciar cámara: " + (err.message||err);
