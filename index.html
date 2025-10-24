@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Escáner QR - Registro</title>
+<title>Escáner QR + Alerta Telegram</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-body{font-family:Arial, sans-serif;background:#0f172a;color:#fff;text-align:center;padding:10px}
+body{font-family:Arial;background:#0f172a;color:#fff;text-align:center;padding:10px}
 #reader{width:100%;max-width:380px;margin:auto;border-radius:12px;overflow:hidden}
 button{margin:6px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-weight:bold}
 .btn-start{background:#00c853;color:white}
@@ -20,8 +20,8 @@ td{color:#e2e8f0}
 </style>
 </head>
 <body>
-<h2>📷 Escáner QR - Registro de Asistentes</h2>
-<p>Escanea un código QR con nombre y teléfono. Se guardará la hora y quedará registrado.</p>
+<h2>📷 Escáner QR - Registro con Alerta Telegram</h2>
+<p>Escanea un QR con nombre y teléfono. Se enviará alerta a Telegram automáticamente.</p>
 
 <div id="reader"></div>
 <div>
@@ -33,107 +33,100 @@ td{color:#e2e8f0}
 
 <h3>📋 Registros</h3>
 <table>
-  <thead>
-    <tr><th>Nombre</th><th>Teléfono</th><th>Hora</th></tr>
-  </thead>
+  <thead><tr><th>Nombre</th><th>Teléfono</th><th>Hora</th></tr></thead>
   <tbody id="tableBody"></tbody>
 </table>
 
 <script>
+const BOT_TOKEN = "8188740505:AAFMJio9moB3PtypRlqMHrCobmTVTRo7Vy0  ";  // 🟢 Coloca aquí el token de tu bot
+const CHAT_IDS = [8290866315]; // 🟢 IDs de usuarios a notificar
+
+const STORAGE_KEY = "qr_registros_v2";
 let html5QrCode;
 let isScanning = false;
-const STORAGE_KEY = "qr_registros_v1";
 
-// Cargar registros guardados
-function cargarRegistros(){
-  try{
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  }catch(e){return []}
-}
+function cargarRegistros(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){return[]}}
+function guardarRegistros(arr){localStorage.setItem(STORAGE_KEY,JSON.stringify(arr))}
 
-// Guardar registros
-function guardarRegistros(arr){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-}
-
-// Mostrar tabla
 function mostrarTabla(){
-  const tbody = document.getElementById('tableBody');
-  const registros = cargarRegistros();
-  tbody.innerHTML = "";
+  const tbody=document.getElementById('tableBody');
+  const registros=cargarRegistros();
+  tbody.innerHTML="";
   if(registros.length===0){
-    tbody.innerHTML = `<tr><td colspan="3" style="opacity:0.7">Sin registros</td></tr>`;
-  } else {
+    tbody.innerHTML=`<tr><td colspan="3" style="opacity:0.7">Sin registros</td></tr>`;
+  }else{
     registros.forEach(r=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>`;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>`;
       tbody.appendChild(tr);
     });
   }
 }
 
 function obtenerHora(){
-  const d = new Date();
+  const d=new Date();
   return d.toLocaleString('es-MX',{hour12:false});
 }
 
+function enviarTelegram(nombre,telefono,hora){
+  const mensaje = `🚍 Registro detectado:\n👤 ${nombre}\n📱 ${telefono || "Sin teléfono"}\n🕒 ${hora}`;
+  CHAT_IDS.forEach(id=>{
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:id,text:mensaje})
+    }).catch(err=>console.error("Error enviando a Telegram:",err));
+  });
+}
+
 function procesarQR(txt){
-  let nombre="", telefono="";
+  let nombre="",telefono="";
   try{
-    const data = JSON.parse(txt);
-    nombre = data.nombre || data.name || txt;
-    telefono = data.telefono || data.phone || "";
-  }catch(e){
-    nombre = txt;
-  }
-  const hora = obtenerHora();
-  const registro = {nombre, telefono, hora};
-  const registros = cargarRegistros();
+    const data=JSON.parse(txt);
+    nombre=data.nombre||data.name||txt;
+    telefono=data.telefono||data.phone||"";
+  }catch(e){nombre=txt}
+  const hora=obtenerHora();
+  const registro={nombre,telefono,hora};
+  const registros=cargarRegistros();
   registros.unshift(registro);
   guardarRegistros(registros);
   mostrarTabla();
 
-  document.getElementById('status').textContent = 
-    `✅ Escaneado: ${nombre} (${telefono || "sin teléfono"}) a las ${hora}`;
+  document.getElementById('status').textContent=`✅ Escaneado: ${nombre} (${telefono||"sin teléfono"}) a las ${hora}`;
   navigator.vibrate?.(120);
+  enviarTelegram(nombre,telefono,hora);
 }
 
 async function startCamera(){
-  if(isScanning) return;
-  const status = document.getElementById('status');
+  if(isScanning)return;
+  const status=document.getElementById('status');
   try{
-    html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-    await html5QrCode.start(
-      { facingMode: { exact: "environment" } },
-      config,
-      qrText => {
-        procesarQR(qrText);
-      }
-    );
-    isScanning = true;
-    status.textContent = "Escaneando... apunta al QR";
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
+    html5QrCode=new Html5Qrcode("reader");
+    const config={fps:10,qrbox:{width:250,height:250}};
+    await html5QrCode.start({facingMode:{exact:"environment"}},config,qrText=>{procesarQR(qrText)});
+    isScanning=true;
+    status.textContent="Escaneando... apunta al QR";
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('stopBtn').disabled=false;
   }catch(err){
-    status.textContent = "⚠️ Error al iniciar cámara: " + err.message;
+    status.textContent="⚠️ Error al iniciar cámara: "+err.message;
     alert("No se pudo iniciar la cámara.\nActiva permisos o usa HTTPS.");
   }
 }
 
 async function stopCamera(){
-  const status = document.getElementById('status');
-  if(html5QrCode && isScanning){
+  const status=document.getElementById('status');
+  if(html5QrCode&&isScanning){
     await html5QrCode.stop().catch(()=>{});
     await html5QrCode.clear();
-    isScanning = false;
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
-    status.textContent = "Cámara detenida.";
+    isScanning=false;
+    document.getElementById('startBtn').disabled=false;
+    document.getElementById('stopBtn').disabled=true;
+    status.textContent="Cámara detenida.";
   }
 }
 
-// Borrar todos los registros
 function limpiarRegistros(){
   if(confirm("¿Borrar todos los registros?")){
     localStorage.removeItem(STORAGE_KEY);
@@ -141,11 +134,10 @@ function limpiarRegistros(){
   }
 }
 
-document.getElementById('startBtn').onclick = startCamera;
-document.getElementById('stopBtn').onclick = stopCamera;
-document.getElementById('clearBtn').onclick = limpiarRegistros;
+document.getElementById('startBtn').onclick=startCamera;
+document.getElementById('stopBtn').onclick=stopCamera;
+document.getElementById('clearBtn').onclick=limpiarRegistros;
 
-// Mostrar al cargar
 mostrarTabla();
 </script>
 </body>
