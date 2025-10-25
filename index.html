@@ -40,225 +40,131 @@
 </table>
 
 <p id="status">Listo.</p>
-<p class="small">Nota: si tu bot o chat id son correctos, el mensaje debe llegar. Si el navegador bloquea CORS, se abrirá la URL en una nueva pestaña como fallback.</p>
 
 <script>
-/*
-  CONFIGURACIÓN:
-  - PON TU TOKEN AQUÍ (sin espacios extra).
-  - PON LOS CHAT_IDS como números (sin comillas) o como strings.
-  - EJEMPLO:
-      const BOT_TOKEN = "123456:ABC-DEF..."; 
-      const CHAT_IDS = [123456789, 987654321];
-*/
-const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8"; // <- quita espacios extra si los hubiera
-const CHAT_IDS = [8290866315]; // <- agrega los IDs que necesites
-
+const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8";
+const CHAT_IDS = [8290866315];
 const STORAGE_KEY = "registros_qr_telegram_v1";
 
 let html5QrCode = null;
 let isScanning = false;
+let alreadyScanned = false; // 🔸 Nueva bandera para evitar múltiples lecturas
 
-function log(msg, isError=false){
-  console.log("[APP]", msg);
-  const s = document.getElementById('status');
-  s.textContent = msg;
-  s.style.color = isError ? "#ffcccb" : "#9fc7d9";
+function log(msg,isError=false){
+  console.log("[APP]",msg);
+  const s=document.getElementById('status');
+  s.textContent=msg;
+  s.style.color=isError?"#ffcccb":"#9fc7d9";
 }
 
-function hora(){
-  const d = new Date();
-  return d.toLocaleString('es-MX', { hour12:false });
-}
-
-function cargarDatos(){
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch(e) {
-    return [];
-  }
-}
-
-function guardar(r){
-  const data = cargarDatos();
-  // evita duplicados inmediatos (mismo nombre+tel y misma hora)
-  const existe = data.find(x => x.nombre === r.nombre && x.telefono === r.telefono && x.hora === r.hora);
-  if(!existe) {
-    data.unshift(r);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
-}
-
+function hora(){return new Date().toLocaleString('es-MX',{hour12:false});}
+function cargarDatos(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");}catch(e){return [];}}
+function guardar(r){const d=cargarDatos();d.unshift(r);localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}
 function mostrar(){
-  const data = cargarDatos();
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = "";
-  data.forEach((r,i)=>{
-    const idx = i;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td>
-      <td>${escapeHtml(r.nombre)}</td>
-      <td>${escapeHtml(r.telefono)}</td>
-      <td>${escapeHtml(r.hora)}</td>
-      <td>
-        <button class="btn-alert" onclick="enviar(${idx})">📩 Enviar</button>
-        <button style="margin-left:6px;padding:6px;border-radius:8px" onclick="eliminar(${idx})">🗑️</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
+  const data=cargarDatos(),tb=document.getElementById('tableBody');
+  tb.innerHTML="";
+  data.forEach((r,i)=>tb.innerHTML+=`<tr>
+  <td>${i+1}</td><td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>
+  <td><button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button></td></tr>`);
 }
-
-function escapeHtml(text){
-  return (text+"").replace(/[&<>"'`=\/]/g, function(s) {
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','/':'&#x2F;','=':'&#x3D;'}[s];
-  });
-}
-
-function eliminar(idx){
-  const data = cargarDatos();
-  if(!data[idx]) return;
-  if(!confirm(`Eliminar registro:\n${data[idx].nombre} — ${data[idx].telefono}?`)) return;
-  data.splice(idx,1);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  mostrar();
-  log("Registro eliminado");
-}
-
-/* Procesa texto decodificado del QR. Firma usada por Html5Qrcode:
-   onScanSuccess(decodedText, decodedResult)
-*/
-function procesar(decodedText, decodedResult) {
-  // decodedText es string -> intentamos parsearlo como JSON
-  try {
-    let parsed;
-    try { parsed = JSON.parse(decodedText); } catch(e) { parsed = null; }
-    const nombre = (parsed && (parsed.nombre || parsed.name)) ? (parsed.nombre || parsed.name) : decodedText;
-    const telefono = (parsed && (parsed.telefono || parsed.phone || parsed.telefone)) ? (parsed.telefono || parsed.phone || parsed.telefone) : "";
-    const registro = { nombre: String(nombre).trim(), telefono: String(telefono).trim(), hora: hora() };
-    guardar(registro);
-    mostrar();
-    log("✅ Registro guardado: " + registro.nombre);
-    // opcional: enviar automáticamente (descomentar si quieres envío automático)
-    // enviarUltimo();
-  } catch(e){
-    log("⚠️ Error al procesar QR: " + e.message, true);
-  }
-}
-
-/* Enviar un registro(s) a Telegram.
-   Usamos ALL ORIGINS como proxy para evitar CORS; si falla, abrimos la URL directa en nueva pestaña.
-*/
 async function enviar(idx){
-  const data = cargarDatos();
-  const r = data[idx];
-  if(!r){ alert("No existe el registro"); return; }
-  const mensaje = `🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
-  await enviarMensajeATodos(mensaje);
-}
-
-async function enviarMensajeATodos(mensaje){
-  if(!BOT_TOKEN || !CHAT_IDS || CHAT_IDS.length === 0){
-    alert("Falta configurar BOT_TOKEN o CHAT_IDS en el código.");
-    return;
-  }
+  const data=cargarDatos();const r=data[idx];
+  if(!r)return alert("No existe el registro");
+  const mensaje=`🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
   for(const chat of CHAT_IDS){
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
-    // proxy para evitar CORS (fallback abierto)
-    const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+    const url=`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
+    const proxy="https://api.allorigins.win/raw?url="+encodeURIComponent(url);
     try{
-      const res = await fetch(proxy, { method: "GET" });
-      if(res.ok){
-        // Telegram responde JSON; lo ignoramos, solo chequeamos OK
-        log(`✅ Enviado a ${chat}`);
-      } else {
-        // fallback: intentar abrir la url en nueva pestaña (user will need to approve)
-        log(`⚠️ Proxy falló (status ${res.status}). Abriendo URL directa...`, true);
-        window.open(url, "_blank");
-      }
+      const res=await fetch(proxy);
+      if(res.ok) log(`✅ Enviado a ${chat}`);
+      else{throw new Error("Respuesta no OK");}
     }catch(e){
-      // probablemente CORS o proxy caído -> fallback
-      console.warn("Error fetch proxy:", e);
-      log("⚠️ No se pudo usar el proxy. Abriendo URL directa...", true);
-      window.open(url, "_blank");
+      log("⚠️ Error al enviar: "+e.message,true);
+      window.open(url,"_blank");
     }
   }
-  alert("Intento de envío realizado. Revisa tu Telegram.");
+  alert("Mensaje enviado o en intento. Revisa Telegram.");
 }
 
-/* Enviar todo */
-document.getElementById('sendAllBtn').addEventListener('click', async ()=>{
-  const data = cargarDatos();
-  if(!data.length){ alert("No hay registros para enviar."); return; }
-  if(!confirm(`Enviar ${data.length} registros a los chat(s) configurados?`)) return;
-  for(const r of data){
-    const mensaje = `🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
-    await enviarMensajeATodos(mensaje);
-    // ligera pausa entre mensajes (evita bloqueos)
-    await new Promise(res=>setTimeout(res, 500));
-  }
-});
+async function procesar(decodedText){
+  if(alreadyScanned) return; // 🔸 Evita duplicados
+  alreadyScanned = true; // marca como escaneado
 
-/* Botones start/stop y selección de cámara trasera si existe */
-document.getElementById('startBtn').onclick = async ()=>{
-  if(isScanning) return;
-  html5QrCode = new Html5Qrcode("reader");
+  // 🔸 Vibra el dispositivo al escanear
+  if (navigator.vibrate) navigator.vibrate(300);
+
   try{
-    const devices = await Html5Qrcode.getCameras();
-    if(devices && devices.length){
-      // intentar elegir la cámara trasera por heurística en label (back, rear, trasera)
-      let cameraId = devices[0].id;
-      for(const d of devices){
-        const label = (d.label||"").toLowerCase();
-        if(label.includes("back") || label.includes("rear") || label.includes("tras") || label.includes("post") || label.includes("principal")){
-          cameraId = d.id;
-          break;
-        }
-      }
-      await html5QrCode.start(
-        cameraId,
-        { fps: 10, qrbox: 250, aspectRatio: 1.333 },
-        procesar,
-        (errorMessage) => { /* onScanError - opcional */ }
-      );
-      isScanning = true;
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-      log("📷 Escaneando...");
-    } else {
-      log("⚠️ No se encontró cámara", true);
-      alert("No se encontró ninguna cámara disponible.");
-    }
-  }catch(err){
-    console.error("Error al iniciar cámara:", err);
-    if(err && /PermissionDenied|NotAllowedError/i.test(err.message || "")){
-      log("Permiso de cámara denegado. Revisa permisos del navegador.", true);
-      alert("Permiso de cámara denegado. Activa permisos y recarga la página.");
-    } else {
-      log("Error al iniciar cámara: " + (err.message || err), true);
-      alert("Error al iniciar la cámara: " + (err.message || err));
-    }
+    const data = JSON.parse(decodedText);
+    const r = {
+      nombre: data.nombre || data.name || decodedText,
+      telefono: data.telefono || data.phone || "",
+      hora: hora()
+    };
+    guardar(r); mostrar(); log("✅ Registro guardado: "+r.nombre);
+  }catch(e){
+    log("⚠️ Código QR inválido",true);
   }
-};
 
-document.getElementById('stopBtn').onclick = async ()=>{
+  // 🔸 Detiene el escaneo automáticamente tras un resultado
+  setTimeout(detenerEscaneo, 800);
+}
+
+async function detenerEscaneo(){
   if(isScanning && html5QrCode){
     try{
       await html5QrCode.stop();
       await html5QrCode.clear();
-    }catch(e){ console.warn("Error al detener:", e); }
-    isScanning = false;
-    document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
-    log("Cámara detenida");
+    }catch(e){console.warn("Error al detener:",e);}
+    isScanning=false;
+    document.getElementById('startBtn').disabled=false;
+    document.getElementById('stopBtn').disabled=true;
+    log("📴 Escaneo detenido automáticamente.");
+  }
+}
+
+document.getElementById('startBtn').onclick=async()=>{
+  if(isScanning)return;
+  alreadyScanned = false; // 🔸 Reset para nuevo escaneo
+  html5QrCode = new Html5Qrcode("reader");
+  try{
+    const devices = await Html5Qrcode.getCameras();
+    if(devices && devices.length){
+      let cameraId = devices[0].id;
+      for(const d of devices){
+        const label=(d.label||"").toLowerCase();
+        if(label.includes("back")||label.includes("rear")||label.includes("tras")){cameraId=d.id;break;}
+      }
+      await html5QrCode.start(cameraId,{fps:10,qrbox:250},procesar);
+      isScanning=true;
+      document.getElementById('startBtn').disabled=true;
+      document.getElementById('stopBtn').disabled=false;
+      log("📷 Escaneando...");
+    }else{log("⚠️ No se encontró cámara",true);}
+  }catch(err){log("Error al iniciar cámara: "+err.message,true);}
+};
+
+document.getElementById('stopBtn').onclick=detenerEscaneo;
+
+document.getElementById('sendAllBtn').onclick=async()=>{
+  const data=cargarDatos();
+  if(!data.length)return alert("No hay registros para enviar.");
+  if(!confirm(`Enviar ${data.length} registros a Telegram?`))return;
+  for(const r of data){
+    const msg=`🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
+    await enviarMensaje(msg); await new Promise(r=>setTimeout(r,500));
   }
 };
 
-/* Mostrar registros al cargar */
-mostrar();
+async function enviarMensaje(mensaje){
+  for(const chat of CHAT_IDS){
+    const url=`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
+    const proxy="https://api.allorigins.win/raw?url="+encodeURIComponent(url);
+    try{await fetch(proxy);}catch{window.open(url,"_blank");}
+  }
+}
 
-/* Permitir invocar enviar desde HTML inline (porque mostramos botones con onclick en la tabla) */
-window.enviar = enviar;
-window.eliminar = eliminar;
+mostrar();
+window.enviar=enviar;
 </script>
 </body>
 </html>
