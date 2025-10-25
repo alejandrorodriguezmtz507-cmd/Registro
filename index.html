@@ -13,6 +13,7 @@
   .btn-stop{background:#e53935;color:#fff;}
   .btn-alert{background:#0277bd;color:#fff;font-size:12px;padding:6px 8px;border-radius:8px;}
   .btn-send-all{background:#ffb300;color:#000;padding:8px 12px;border-radius:10px;}
+  .btn-delete-all{background:#f44336;color:#fff;padding:8px 12px;border-radius:10px;}
   table{width:100%;max-width:850px;margin:14px auto;border-collapse:collapse;}
   th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-size:14px;}
   th{background:#1b2a40;}
@@ -31,6 +32,7 @@
   <button id="startBtn" class="btn-start">Iniciar escaneo</button>
   <button id="stopBtn" class="btn-stop" disabled>Detener</button>
   <button id="sendAllBtn" class="btn-send-all">📤 Enviar todo a Telegram</button>
+  <button id="deleteAllBtn" class="btn-delete-all">🗑️ Borrar todo</button>
 </div>
 
 <h3>📋 Registros</h3>
@@ -42,13 +44,15 @@
 <p id="status">Listo.</p>
 
 <script>
+/* === CONFIGURA TU BOT AQUÍ === */
 const BOT_TOKEN = "7753210477:AAFmRv9Z-LR4Kk354FiP_0Vq167ajOKx2Y8";
-const CHAT_IDS = [8290866315];
-const STORAGE_KEY = "registros_qr_telegram_v1";
+const CHAT_IDS = [8290866315]; // Puedes agregar más IDs separados por coma
+const STORAGE_KEY = "registros_qr_telegram_v2";
+/* ============================== */
 
 let html5QrCode = null;
 let isScanning = false;
-let alreadyScanned = false; // 🔸 Nueva bandera para evitar múltiples lecturas
+let alreadyScanned = false;
 
 function log(msg,isError=false){
   console.log("[APP]",msg);
@@ -60,53 +64,105 @@ function log(msg,isError=false){
 function hora(){return new Date().toLocaleString('es-MX',{hour12:false});}
 function cargarDatos(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");}catch(e){return [];}}
 function guardar(r){const d=cargarDatos();d.unshift(r);localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}
+
 function mostrar(){
-  const data=cargarDatos(),tb=document.getElementById('tableBody');
+  const data=cargarDatos();
+  const tb=document.getElementById('tableBody');
   tb.innerHTML="";
-  data.forEach((r,i)=>tb.innerHTML+=`<tr>
-  <td>${i+1}</td><td>${r.nombre}</td><td>${r.telefono}</td><td>${r.hora}</td>
-  <td><button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button></td></tr>`);
+  data.forEach((r,i)=>{
+    tb.innerHTML+=`
+    <tr>
+      <td>${i+1}</td>
+      <td>${r.nombre}</td>
+      <td>${r.telefono}</td>
+      <td>${r.hora}</td>
+      <td>
+        <button class="btn-alert" onclick="enviar(${i})">📩 Enviar</button>
+        <button style="background:#f44336;color:#fff;padding:6px 8px;border-radius:8px;" onclick="eliminar(${i})">🗑️</button>
+      </td>
+    </tr>`;
+  });
 }
-async function enviar(idx){
-  const data=cargarDatos();const r=data[idx];
-  if(!r)return alert("No existe el registro");
+
+/* ===== ELIMINAR UN REGISTRO ===== */
+function eliminar(i){
+  const data=cargarDatos();
+  if(!data[i])return;
+  if(confirm(`¿Eliminar el registro de ${data[i].nombre}?`)){
+    data.splice(i,1);
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+    mostrar();
+    log("Registro eliminado");
+  }
+}
+
+/* ===== ELIMINAR TODOS ===== */
+document.getElementById('deleteAllBtn').onclick=()=>{
+  if(confirm("¿Seguro que quieres eliminar todos los registros?")){
+    localStorage.removeItem(STORAGE_KEY);
+    mostrar();
+    log("Todos los registros eliminados");
+  }
+}
+
+/* ===== ENVIAR UN REGISTRO ===== */
+async function enviar(i){
+  const data=cargarDatos();
+  const r=data[i];
+  if(!r)return alert("No existe el registro.");
   const mensaje=`🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
+  await enviarTelegram(mensaje);
+}
+
+/* ===== ENVIAR MENSAJE A TELEGRAM ===== */
+async function enviarTelegram(mensaje){
   for(const chat of CHAT_IDS){
     const url=`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
-    const proxy="https://api.allorigins.win/raw?url="+encodeURIComponent(url);
     try{
-      const res=await fetch(proxy);
-      if(res.ok) log(`✅ Enviado a ${chat}`);
-      else{throw new Error("Respuesta no OK");}
+      const res=await fetch(url);
+      if(res.ok){log(`✅ Enviado a ${chat}`);}
+      else{throw new Error("Error al enviar");}
     }catch(e){
-      log("⚠️ Error al enviar: "+e.message,true);
+      console.warn("Error Telegram:",e);
+      log("⚠️ Error de conexión. Intentando abrir directamente...");
       window.open(url,"_blank");
     }
   }
-  alert("Mensaje enviado o en intento. Revisa Telegram.");
 }
 
-async function procesar(decodedText){
-  if(alreadyScanned) return; // 🔸 Evita duplicados
-  alreadyScanned = true; // marca como escaneado
+/* ===== ENVIAR TODOS LOS REGISTROS ===== */
+document.getElementById('sendAllBtn').onclick=async()=>{
+  const data=cargarDatos();
+  if(!data.length)return alert("No hay registros para enviar.");
+  if(!confirm(`¿Enviar ${data.length} registros a Telegram?`))return;
+  for(const r of data){
+    const msg=`🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
+    await enviarTelegram(msg);
+    await new Promise(r=>setTimeout(r,500));
+  }
+  alert("Envío finalizado ✅");
+}
 
-  // 🔸 Vibra el dispositivo al escanear
-  if (navigator.vibrate) navigator.vibrate(300);
+/* ===== ESCANEO ===== */
+async function procesar(decodedText){
+  if(alreadyScanned)return;
+  alreadyScanned=true;
+
+  // Vibración al escanear
+  if(navigator.vibrate)navigator.vibrate(300);
 
   try{
-    const data = JSON.parse(decodedText);
-    const r = {
-      nombre: data.nombre || data.name || decodedText,
-      telefono: data.telefono || data.phone || "",
-      hora: hora()
+    const data=JSON.parse(decodedText);
+    const r={
+      nombre:data.nombre||data.name||decodedText,
+      telefono:data.telefono||data.phone||"",
+      hora:hora()
     };
     guardar(r); mostrar(); log("✅ Registro guardado: "+r.nombre);
-  }catch(e){
-    log("⚠️ Código QR inválido",true);
-  }
+  }catch(e){log("⚠️ QR inválido",true);}
 
-  // 🔸 Detiene el escaneo automáticamente tras un resultado
-  setTimeout(detenerEscaneo, 800);
+  // Detiene automáticamente el escaneo
+  setTimeout(detenerEscaneo,700);
 }
 
 async function detenerEscaneo(){
@@ -114,22 +170,23 @@ async function detenerEscaneo(){
     try{
       await html5QrCode.stop();
       await html5QrCode.clear();
-    }catch(e){console.warn("Error al detener:",e);}
+    }catch(e){console.warn("Error detener:",e);}
     isScanning=false;
     document.getElementById('startBtn').disabled=false;
     document.getElementById('stopBtn').disabled=true;
-    log("📴 Escaneo detenido automáticamente.");
+    log("📴 Escaneo detenido");
   }
 }
 
+/* ===== BOTONES ===== */
 document.getElementById('startBtn').onclick=async()=>{
   if(isScanning)return;
-  alreadyScanned = false; // 🔸 Reset para nuevo escaneo
-  html5QrCode = new Html5Qrcode("reader");
+  alreadyScanned=false;
+  html5QrCode=new Html5Qrcode("reader");
   try{
-    const devices = await Html5Qrcode.getCameras();
+    const devices=await Html5Qrcode.getCameras();
     if(devices && devices.length){
-      let cameraId = devices[0].id;
+      let cameraId=devices[0].id;
       for(const d of devices){
         const label=(d.label||"").toLowerCase();
         if(label.includes("back")||label.includes("rear")||label.includes("tras")){cameraId=d.id;break;}
@@ -145,26 +202,10 @@ document.getElementById('startBtn').onclick=async()=>{
 
 document.getElementById('stopBtn').onclick=detenerEscaneo;
 
-document.getElementById('sendAllBtn').onclick=async()=>{
-  const data=cargarDatos();
-  if(!data.length)return alert("No hay registros para enviar.");
-  if(!confirm(`Enviar ${data.length} registros a Telegram?`))return;
-  for(const r of data){
-    const msg=`🚍 Registro escaneado:\n👤 ${r.nombre}\n📱 ${r.telefono}\n🕒 ${r.hora}`;
-    await enviarMensaje(msg); await new Promise(r=>setTimeout(r,500));
-  }
-};
-
-async function enviarMensaje(mensaje){
-  for(const chat of CHAT_IDS){
-    const url=`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(mensaje)}`;
-    const proxy="https://api.allorigins.win/raw?url="+encodeURIComponent(url);
-    try{await fetch(proxy);}catch{window.open(url,"_blank");}
-  }
-}
-
+/* ===== INICIO ===== */
 mostrar();
 window.enviar=enviar;
+window.eliminar=eliminar;
 </script>
 </body>
 </html>
